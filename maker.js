@@ -27,6 +27,13 @@ class PixelClickerApp {
         this.touchStartX = 0;
         this.touchStartY = 0;
         
+        // 鼠标拖拽相关变量
+        this.isDragging = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
+        this.dragStartOffsetX = 0;
+        this.dragStartOffsetY = 0;
+        
         // 缩放中心点
         this.zoomCenterX = 0;
         this.zoomCenterY = 0;
@@ -293,6 +300,11 @@ class PixelClickerApp {
     setupCanvasInteraction() {
         // 鼠标事件（桌面端）
         this.canvas.addEventListener('click', (e) => this.handleClick(e));
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        this.canvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e)); // 鼠标离开时停止拖拽
+        this.canvas.addEventListener('wheel', (e) => this.handleWheel(e));
         
         // 触摸事件（移动端）
         this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
@@ -303,11 +315,98 @@ class PixelClickerApp {
         this.canvas.addEventListener('touchstart', (e) => e.preventDefault());
         this.canvas.addEventListener('touchmove', (e) => e.preventDefault());
         this.canvas.addEventListener('touchend', (e) => e.preventDefault());
+        
+        // 阻止右键菜单
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     }
     
     handleClick(e) {
-        if (!this.image) return;
+        if (!this.image || this.isDragging) return;
         this.processClick(e.clientX, e.clientY);
+    }
+    
+    handleMouseDown(e) {
+        if (!this.image) return;
+        
+        // 只处理左键
+        if (e.button !== 0) return;
+        
+        this.isDragging = true;
+        this.dragStartX = e.clientX;
+        this.dragStartY = e.clientY;
+        this.dragStartOffsetX = this.offsetX;
+        this.dragStartOffsetY = this.offsetY;
+        
+        // 改变光标样式
+        this.canvas.style.cursor = 'grabbing';
+        
+        // 阻止文本选择
+        e.preventDefault();
+    }
+    
+    handleMouseMove(e) {
+        if (!this.image) return;
+        
+        if (this.isDragging) {
+            const deltaX = e.clientX - this.dragStartX;
+            const deltaY = e.clientY - this.dragStartY;
+            
+            this.offsetX = this.dragStartOffsetX + deltaX;
+            this.offsetY = this.dragStartOffsetY + deltaY;
+            
+            this.renderImage();
+        } else {
+            // 鼠标悬停时的光标样式
+            const scaledWidth = this.originalWidth * this.zoom;
+            const scaledHeight = this.originalHeight * this.zoom;
+            const containerRect = this.canvasContainer.getBoundingClientRect();
+            
+            if (scaledWidth > containerRect.width || scaledHeight > containerRect.height) {
+                this.canvas.style.cursor = 'grab';
+            } else {
+                this.canvas.style.cursor = 'crosshair';
+            }
+        }
+    }
+    
+    handleMouseUp(e) {
+        if (!this.image) return;
+        
+        this.isDragging = false;
+        
+        // 恢复光标样式
+        const scaledWidth = this.originalWidth * this.zoom;
+        const scaledHeight = this.originalHeight * this.zoom;
+        const containerRect = this.canvasContainer.getBoundingClientRect();
+        
+        if (scaledWidth > containerRect.width || scaledHeight > containerRect.height) {
+            this.canvas.style.cursor = 'grab';
+        } else {
+            this.canvas.style.cursor = 'crosshair';
+        }
+    }
+    
+    handleWheel(e) {
+        if (!this.image) return;
+        
+        e.preventDefault();
+        
+        // 获取鼠标位置作为缩放中心
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const oldZoom = this.zoom;
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        this.zoom = Math.min(Math.max(this.zoom * zoomFactor, 0.1), 10);
+        
+        // 以鼠标位置为中心缩放
+        const zoomRatio = this.zoom / oldZoom;
+        this.offsetX = mouseX - (mouseX - this.offsetX) * zoomRatio;
+        this.offsetY = mouseY - (mouseY - this.offsetY) * zoomRatio;
+        
+        this.renderImage();
+        this.updateZoomLevel();
     }
     
     handleTouchStart(e) {
@@ -326,9 +425,6 @@ class PixelClickerApp {
             this.panStartOffsetX = this.offsetX;
             this.panStartOffsetY = this.offsetY;
             this.isPanning = false;
-            
-            // 调试信息
-            console.log(`触摸开始: startX=${this.panStartX}, startY=${this.panStartY}, offsetX=${this.panStartOffsetX}, offsetY=${this.panStartOffsetY}`);
         } else if (e.touches.length === 2) {
             // 双指缩放开始
             this.lastTouchDistance = this.getTouchDistance(e.touches);
@@ -366,9 +462,6 @@ class PixelClickerApp {
                 // 临时设置偏移量以便limitOffset处理
                 this.offsetX = newOffsetX;
                 this.offsetY = newOffsetY;
-                
-                // 调试信息
-                console.log(`平移中: deltaX=${deltaX}, deltaY=${deltaY}, offsetX=${this.offsetX}, offsetY=${this.offsetY}`);
                 
                 this.renderImage();
             }
@@ -559,9 +652,9 @@ class PixelClickerApp {
             this.zoom = Math.min(this.zoom * 1.5, 10);
             
             // 以画布中心为缩放中心
-            const rect = this.canvas.getBoundingClientRect();
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
+            const containerRect = this.canvasContainer.getBoundingClientRect();
+            const centerX = containerRect.width / 2;
+            const centerY = containerRect.height / 2;
             
             const zoomRatio = this.zoom / oldZoom;
             this.offsetX = centerX - (centerX - this.offsetX) * zoomRatio;
@@ -578,9 +671,9 @@ class PixelClickerApp {
             this.zoom = Math.max(this.zoom / 1.5, 0.1);
             
             // 以画布中心为缩放中心
-            const rect = this.canvas.getBoundingClientRect();
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
+            const containerRect = this.canvasContainer.getBoundingClientRect();
+            const centerX = containerRect.width / 2;
+            const centerY = containerRect.height / 2;
             
             const zoomRatio = this.zoom / oldZoom;
             this.offsetX = centerX - (centerX - this.offsetX) * zoomRatio;

@@ -87,6 +87,33 @@
             font-size: 14px;
         }
         
+        .desktop-tips {
+            display: block;
+            margin-top: 10px;
+            padding: 12px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            border-left: 4px solid #007cba;
+            font-size: 14px;
+            color: #005a87;
+        }
+        
+        .desktop-tips h4 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: #004d73;
+        }
+        
+        .desktop-tips ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .desktop-tips li {
+            margin: 4px 0;
+            line-height: 1.4;
+        }
+        
         .mobile-tips {
             display: none;
             margin-top: 10px;
@@ -189,6 +216,10 @@
             
             .canvas-container {
                 max-height: 60vh;
+            }
+            
+            .desktop-tips {
+                display: none;
             }
             
             .mobile-tips {
@@ -333,6 +364,15 @@
         
         <div class="info">
             <div>点击任意像素获取坐标</div>
+            <div class="desktop-tips">
+                <h4>💻 桌面端操作指南</h4>
+                <ul>
+                    <li><strong>点击</strong>：左键点击像素点获取坐标</li>
+                    <li><strong>平移</strong>：左键拖拽移动图片</li>
+                    <li><strong>缩放</strong>：鼠标滚轮放大/缩小</li>
+                    <li><strong>快捷键</strong>：+ 放大，- 缩小，0 重置</li>
+                </ul>
+            </div>
             <div class="mobile-tips">
                 <h4>📱 移动端操作指南</h4>
                 <ul>
