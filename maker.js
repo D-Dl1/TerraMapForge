@@ -34,6 +34,10 @@ class PixelClickerApp {
         this.dragStartOffsetX = 0;
         this.dragStartOffsetY = 0;
         
+        // 指针事件相关变量
+        this.activePointers = new Map();
+        this.isPointerDragging = false;
+        
         // 缩放中心点
         this.zoomCenterX = 0;
         this.zoomCenterY = 0;
@@ -298,13 +302,32 @@ class PixelClickerApp {
     }
     
     setupCanvasInteraction() {
-        // 鼠标事件（桌面端）
+        // 检查是否支持指针事件
+        const supportsPointer = 'onpointerdown' in window;
+        
+        if (supportsPointer) {
+            // 使用指针事件（现代浏览器推荐）
+            this.canvas.addEventListener('pointerdown', (e) => this.handlePointerDown(e));
+            this.canvas.addEventListener('pointermove', (e) => this.handlePointerMove(e));
+            this.canvas.addEventListener('pointerup', (e) => this.handlePointerUp(e));
+            this.canvas.addEventListener('pointercancel', (e) => this.handlePointerUp(e));
+            this.canvas.addEventListener('pointerleave', (e) => this.handlePointerUp(e));
+        } else {
+            // 回退到传统鼠标事件
+            this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+            this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+            this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+            this.canvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
+        }
+        
+        // 通用事件
         this.canvas.addEventListener('click', (e) => this.handleClick(e));
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-        this.canvas.addEventListener('mouseleave', (e) => this.handleMouseUp(e)); // 鼠标离开时停止拖拽
         this.canvas.addEventListener('wheel', (e) => this.handleWheel(e));
+        
+        // 触摸板手势事件
+        this.canvas.addEventListener('gesturestart', (e) => this.handleGestureStart(e));
+        this.canvas.addEventListener('gesturechange', (e) => this.handleGestureChange(e));
+        this.canvas.addEventListener('gestureend', (e) => this.handleGestureEnd(e));
         
         // 触摸事件（移动端）
         this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
@@ -318,18 +341,151 @@ class PixelClickerApp {
         
         // 阻止右键菜单
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // 阻止触摸板的默认手势
+        this.canvas.addEventListener('gesturestart', (e) => e.preventDefault());
+        this.canvas.addEventListener('gesturechange', (e) => e.preventDefault());
+        this.canvas.addEventListener('gestureend', (e) => e.preventDefault());
+    }
+    
+    // 指针事件处理
+    handlePointerDown(e) {
+        if (!this.image) return;
+        
+        // 只处理主要按钮（左键、触摸、笔）
+        if (e.button !== 0) return;
+        
+        this.activePointers.set(e.pointerId, {
+            x: e.clientX,
+            y: e.clientY,
+            type: e.pointerType,
+            startX: e.clientX,
+            startY: e.clientY
+        });
+        
+        // 如果是第一个指针，开始拖拽
+        if (this.activePointers.size === 1) {
+            this.isPointerDragging = true;
+            this.dragStartX = e.clientX;
+            this.dragStartY = e.clientY;
+            this.dragStartOffsetX = this.offsetX;
+            this.dragStartOffsetY = this.offsetY;
+            
+            this.canvas.style.cursor = 'grabbing';
+            
+            // 尝试捕获指针（如果支持）
+            try {
+                this.canvas.setPointerCapture(e.pointerId);
+            } catch (err) {
+                // 某些浏览器可能不支持setPointerCapture
+                console.log('setPointerCapture not supported');
+            }
+        }
+        
+        e.preventDefault();
+    }
+    
+    handlePointerMove(e) {
+        if (!this.image) return;
+        
+        if (this.activePointers.has(e.pointerId)) {
+            const pointer = this.activePointers.get(e.pointerId);
+            this.activePointers.set(e.pointerId, {
+                ...pointer,
+                x: e.clientX,
+                y: e.clientY
+            });
+        }
+        
+        if (this.isPointerDragging && this.activePointers.size === 1) {
+            // 单指拖拽
+            const deltaX = e.clientX - this.dragStartX;
+            const deltaY = e.clientY - this.dragStartY;
+            
+            this.offsetX = this.dragStartOffsetX + deltaX;
+            this.offsetY = this.dragStartOffsetY + deltaY;
+            
+            this.renderImage();
+        } else if (this.activePointers.size === 2) {
+            // 双指缩放（触摸板或多点触控）
+            this.handleMultiPointerZoom();
+        } else if (!this.isPointerDragging) {
+            // 鼠标悬停时的光标样式
+            this.updateCursorStyle();
+        }
+    }
+    
+    handleMultiPointerZoom() {
+        const pointers = Array.from(this.activePointers.values());
+        if (pointers.length !== 2) return;
+        
+        const [p1, p2] = pointers;
+        const currentDistance = Math.sqrt(
+            Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)
+        );
+        
+        const startDistance = Math.sqrt(
+            Math.pow(p1.startX - p2.startX, 2) + Math.pow(p1.startY - p2.startY, 2)
+        );
+        
+        if (startDistance > 0 && currentDistance > 0) {
+            const scale = currentDistance / startDistance;
+            const centerX = (p1.x + p2.x) / 2;
+            const centerY = (p1.y + p2.y) / 2;
+            
+            // 获取相对于canvas的坐标
+            const rect = this.canvas.getBoundingClientRect();
+            const canvasCenterX = centerX - rect.left;
+            const canvasCenterY = centerY - rect.top;
+            
+            const oldZoom = this.zoom;
+            const newZoom = this.touchStartZoom * scale;
+            this.zoom = Math.min(Math.max(newZoom, 0.1), 10);
+            
+            // 以双指中心为缩放中心
+            const zoomRatio = this.zoom / oldZoom;
+            this.offsetX = canvasCenterX - (canvasCenterX - this.offsetX) * zoomRatio;
+            this.offsetY = canvasCenterY - (canvasCenterY - this.offsetY) * zoomRatio;
+            
+            this.renderImage();
+            this.updateZoomLevel();
+        }
+    }
+    
+    handlePointerUp(e) {
+        if (!this.image) return;
+        
+        this.activePointers.delete(e.pointerId);
+        
+        if (this.activePointers.size === 0) {
+            this.isPointerDragging = false;
+            this.updateCursorStyle();
+        } else if (this.activePointers.size === 1) {
+            // 如果还有一个指针，重新开始拖拽
+            const remainingPointer = this.activePointers.values().next().value;
+            this.dragStartX = remainingPointer.x;
+            this.dragStartY = remainingPointer.y;
+            this.dragStartOffsetX = this.offsetX;
+            this.dragStartOffsetY = this.offsetY;
+            this.isPointerDragging = true;
+        }
+        
+        // 如果是双指操作的开始，记录初始缩放
+        if (this.activePointers.size === 2) {
+            this.touchStartZoom = this.zoom;
+        }
     }
     
     handleClick(e) {
-        if (!this.image || this.isDragging) return;
+        if (!this.image || this.isDragging || this.isPointerDragging) return;
         this.processClick(e.clientX, e.clientY);
     }
     
     handleMouseDown(e) {
         if (!this.image) return;
         
-        // 只处理左键
-        if (e.button !== 0) return;
+        // 只处理左键，并且确保不是触摸板手势
+        if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
         
         this.isDragging = true;
         this.dragStartX = e.clientX;
@@ -357,15 +513,7 @@ class PixelClickerApp {
             this.renderImage();
         } else {
             // 鼠标悬停时的光标样式
-            const scaledWidth = this.originalWidth * this.zoom;
-            const scaledHeight = this.originalHeight * this.zoom;
-            const containerRect = this.canvasContainer.getBoundingClientRect();
-            
-            if (scaledWidth > containerRect.width || scaledHeight > containerRect.height) {
-                this.canvas.style.cursor = 'grab';
-            } else {
-                this.canvas.style.cursor = 'crosshair';
-            }
+            this.updateCursorStyle();
         }
     }
     
@@ -375,6 +523,12 @@ class PixelClickerApp {
         this.isDragging = false;
         
         // 恢复光标样式
+        this.updateCursorStyle();
+    }
+    
+    updateCursorStyle() {
+        if (!this.image) return;
+        
         const scaledWidth = this.originalWidth * this.zoom;
         const scaledHeight = this.originalHeight * this.zoom;
         const containerRect = this.canvasContainer.getBoundingClientRect();
@@ -391,13 +545,30 @@ class PixelClickerApp {
         
         e.preventDefault();
         
+        // 检测是否是触摸板的捏合手势
+        const isTouchpadPinch = e.ctrlKey;
+        // 检测是否是触摸板的滚动（通常deltaMode为0且delta值较小）
+        const isTouchpadScroll = e.deltaMode === 0 && Math.abs(e.deltaY) < 50;
+        
         // 获取鼠标位置作为缩放中心
         const rect = this.canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
         
         const oldZoom = this.zoom;
-        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        let zoomFactor;
+        
+        if (isTouchpadPinch) {
+            // 触摸板捏合手势，使用更精细的缩放
+            zoomFactor = e.deltaY > 0 ? 0.98 : 1.02;
+        } else if (isTouchpadScroll) {
+            // 触摸板滚动，使用中等精度缩放
+            zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
+        } else {
+            // 鼠标滚轮，使用标准缩放
+            zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        }
+        
         this.zoom = Math.min(Math.max(this.zoom * zoomFactor, 0.1), 10);
         
         // 以鼠标位置为中心缩放
@@ -407,6 +578,44 @@ class PixelClickerApp {
         
         this.renderImage();
         this.updateZoomLevel();
+    }
+    
+    // 触摸板手势事件处理
+    handleGestureStart(e) {
+        if (!this.image) return;
+        
+        e.preventDefault();
+        this.touchStartZoom = this.zoom;
+        
+        // 获取手势中心点
+        const rect = this.canvas.getBoundingClientRect();
+        this.zoomCenterX = e.clientX - rect.left;
+        this.zoomCenterY = e.clientY - rect.top;
+    }
+    
+    handleGestureChange(e) {
+        if (!this.image) return;
+        
+        e.preventDefault();
+        
+        const oldZoom = this.zoom;
+        const newZoom = this.touchStartZoom * e.scale;
+        this.zoom = Math.min(Math.max(newZoom, 0.1), 10);
+        
+        // 以手势中心为缩放中心
+        const zoomRatio = this.zoom / oldZoom;
+        this.offsetX = this.zoomCenterX - (this.zoomCenterX - this.offsetX) * zoomRatio;
+        this.offsetY = this.zoomCenterY - (this.zoomCenterY - this.offsetY) * zoomRatio;
+        
+        this.renderImage();
+        this.updateZoomLevel();
+    }
+    
+    handleGestureEnd(e) {
+        if (!this.image) return;
+        
+        e.preventDefault();
+        // 手势结束，可以在这里添加任何清理逻辑
     }
     
     handleTouchStart(e) {
