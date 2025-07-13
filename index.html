@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>像素点击器</title>
+    <title>地图标记器</title>
     <style>
         * {
             -webkit-tap-highlight-color: transparent;
@@ -26,6 +26,13 @@
         .container {
             max-width: 100%;
             margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 15px;
+        }
+        
+        .main-content {
+            min-width: 0;
         }
         
         .controls {
@@ -85,6 +92,141 @@
             background: #e8f4f8;
             border-radius: 8px;
             font-size: 14px;
+        }
+        
+        /* 坐标管理面板 */
+        .coordinates-panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 15px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .coordinates-panel h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .export-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .export-controls button {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 12px;
+            min-height: 36px;
+        }
+        
+        .coordinates-list {
+            max-height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 8px;
+            background: #fafafa;
+        }
+        
+        .coordinate-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+        
+        .coordinate-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .coordinate-item.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+        
+        .coordinate-item .drag-handle {
+            cursor: move;
+            color: #999;
+            font-size: 12px;
+        }
+        
+        .coordinate-item .info {
+            flex: 1;
+            padding: 0;
+            margin: 0;
+            background: none;
+            font-size: 12px;
+        }
+        
+        .coordinate-item .coords {
+            font-family: monospace;
+            font-weight: bold;
+            color: #007cba;
+        }
+        
+        .coordinate-item .name {
+            color: #666;
+            font-size: 11px;
+        }
+        
+        .coordinate-item .name input {
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-size: 11px;
+            width: 80px;
+            background: white;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+        
+        .coordinate-item .actions {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .coordinate-item .actions button {
+            padding: 4px 8px;
+            font-size: 10px;
+            min-height: 24px;
+            min-width: 24px;
+        }
+        
+        .coordinate-item .delete-btn {
+            background: #dc3545;
+        }
+        
+        .coordinate-item .delete-btn:hover {
+            background: #c82333;
+        }
+        
+        .coordinate-item.player {
+            background: #e8f4f8;
+            border-left: 4px solid #007cba;
+        }
+        
+        .coordinate-item.player .delete-btn {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #ccc;
+        }
+        
+        .coordinates-count {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            text-align: center;
         }
         
         .desktop-tips {
@@ -196,7 +338,13 @@
             }
             
             .container {
-                padding: 0;
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .coordinates-panel {
+                order: -1;
+                max-height: 40vh;
             }
             
             .controls {
@@ -215,7 +363,7 @@
             }
             
             .canvas-container {
-                max-height: 60vh;
+                max-height: 50vh;
             }
             
             .desktop-tips {
@@ -267,7 +415,11 @@
             }
             
             .canvas-container {
-                max-height: 55vh;
+                max-height: 45vh;
+            }
+            
+            .coordinates-panel {
+                max-height: 35vh;
             }
         }
         
@@ -315,76 +467,99 @@
         }
         
         /* 滚动条样式 */
-        .canvas-container::-webkit-scrollbar {
+        .canvas-container::-webkit-scrollbar,
+        .coordinates-list::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         
-        .canvas-container::-webkit-scrollbar-track {
+        .canvas-container::-webkit-scrollbar-track,
+        .coordinates-list::-webkit-scrollbar-track {
             background: #f1f1f1;
             border-radius: 4px;
         }
         
-        .canvas-container::-webkit-scrollbar-thumb {
+        .canvas-container::-webkit-scrollbar-thumb,
+        .coordinates-list::-webkit-scrollbar-thumb {
             background: #ccc;
             border-radius: 4px;
         }
         
-        .canvas-container::-webkit-scrollbar-thumb:hover {
+        .canvas-container::-webkit-scrollbar-thumb:hover,
+        .coordinates-list::-webkit-scrollbar-thumb:hover {
             background: #999;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>像素点击器</h1>
-        
-        <div class="controls">
-            <div class="upload-section" id="uploadSection">
-                <div>选择或拖拽图片文件</div>
-                <input type="file" id="imageUpload" accept="image/*">
-                <div>
-                    <button id="uploadBtn" disabled>上传图片</button>
+        <div class="main-content">
+            <h1>地图标记器</h1>
+            
+            <div class="controls">
+                <div class="upload-section" id="uploadSection">
+                    <div>选择或拖拽图片文件</div>
+                    <input type="file" id="imageUpload" accept="image/*">
+                    <div>
+                        <button id="uploadBtn" disabled>上传图片</button>
+                    </div>
+                </div>
+                
+                <div class="zoom-controls">
+                    <div>
+                        <button id="zoomIn">放大 (+)</button>
+                        <button id="zoomOut">缩小 (-)</button>
+                        <button id="resetZoom">重置缩放</button>
+                    </div>
+                    <span id="zoomLevel" class="zoom-level">缩放: 100%</span>
                 </div>
             </div>
             
-            <div class="zoom-controls">
-                <div>
-                    <button id="zoomIn">放大 (+)</button>
-                    <button id="zoomOut">缩小 (-)</button>
-                    <button id="resetZoom">重置缩放</button>
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <div class="info">
+                <div>点击地图添加标记点</div>
+                <div class="desktop-tips">
+                    <h4>💻 桌面端操作指南</h4>
+                    <ul>
+                        <li><strong>点击</strong>：左键点击地图添加标记点</li>
+                        <li><strong>平移</strong>：左键拖拽或触摸板拖拽移动地图</li>
+                        <li><strong>缩放</strong>：鼠标滚轮或触摸板捏合手势</li>
+                        <li><strong>快捷键</strong>：+ 放大，- 缩小，0 重置</li>
+                        <li><strong>标记管理</strong>：在右侧面板编辑名称、拖拽排序</li>
+                    </ul>
                 </div>
-                <span id="zoomLevel" class="zoom-level">缩放: 100%</span>
+                <div class="mobile-tips">
+                    <h4>📱 移动端操作指南</h4>
+                    <ul>
+                        <li><strong>点击</strong>：轻触地图添加标记点</li>
+                        <li><strong>平移</strong>：单指拖拽移动地图</li>
+                        <li><strong>缩放</strong>：双指捏合放大/缩小</li>
+                        <li><strong>标记管理</strong>：在上方面板编辑名称、拖拽排序</li>
+                    </ul>
+                </div>
+                <div id="coordinates" class="coordinates">坐标: 未选择</div>
+                <div id="status" class="status">状态: 请选择并上传图片</div>
             </div>
         </div>
         
-        <div class="canvas-container" id="canvasContainer">
-            <canvas id="canvas"></canvas>
-        </div>
-        
-        <div class="info">
-            <div>点击任意像素获取坐标</div>
-            <div class="desktop-tips">
-                <h4>💻 桌面端操作指南</h4>
-                <ul>
-                    <li><strong>点击</strong>：左键点击像素点获取坐标</li>
-                    <li><strong>平移</strong>：左键拖拽或触摸板拖拽移动图片</li>
-                    <li><strong>缩放</strong>：鼠标滚轮或触摸板捏合手势</li>
-                    <li><strong>快捷键</strong>：+ 放大，- 缩小，0 重置</li>
-                    <li><strong>触摸板</strong>：支持双指缩放和拖拽手势</li>
-                </ul>
+        <div class="coordinates-panel">
+            <h3>标记点管理</h3>
+            
+            <div class="export-controls">
+                <button id="exportCoords">导出坐标</button>
+                <button id="exportNames">导出名称</button>
             </div>
-            <div class="mobile-tips">
-                <h4>📱 移动端操作指南</h4>
-                <ul>
-                    <li><strong>点击</strong>：轻触像素点获取坐标</li>
-                    <li><strong>平移</strong>：单指拖拽移动图片</li>
-                    <li><strong>缩放</strong>：双指捏合放大/缩小</li>
-                    <li><strong>重置</strong>：点击"重置缩放"回到原始大小</li>
-                </ul>
+            
+            <div class="coordinates-count">
+                <span id="coordinatesCount">0</span> / 512 个标记点
             </div>
-            <div id="coordinates" class="coordinates">坐标: 未选择</div>
-            <div id="status" class="status">状态: 请选择并上传图片</div>
+            
+            <div class="coordinates-list" id="coordinatesList">
+                <!-- 坐标列表将在这里动态生成 -->
+            </div>
         </div>
     </div>
     

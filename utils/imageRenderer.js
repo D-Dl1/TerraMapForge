@@ -126,6 +126,13 @@ export class ImageRenderer {
         // 延迟获取图像数据，避免每次都获取
         this.scheduleImageDataUpdate();
         
+        // 重绘标记点
+        setTimeout(() => {
+            if (this.app.clickHandler && this.app.clickHandler.redrawAllMarkers) {
+                this.app.clickHandler.redrawAllMarkers();
+            }
+        }, 10);
+        
         this.app.updateStatus(`图片渲染完成 (${this.app.originalWidth}x${this.app.originalHeight}) 缩放: ${Math.round(this.app.zoom * 100)}%`);
     }
 

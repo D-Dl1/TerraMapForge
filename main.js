@@ -3,6 +3,7 @@ import { EventHandlers } from './utils/eventHandlers.js';
 import { ImageRenderer } from './utils/imageRenderer.js';
 import { ClickHandler } from './utils/clickHandler.js';
 import { ZoomController } from './utils/zoomController.js';
+import { CoordinateManager } from './utils/coordinateManager.js';
 
 class PixelClickerApp {
     constructor() {
@@ -23,6 +24,7 @@ class PixelClickerApp {
         this.imageRenderer = new ImageRenderer(this);
         this.clickHandler = new ClickHandler(this);
         this.zoomController = new ZoomController(this);
+        this.coordinateManager = new CoordinateManager(this);
         
         this.initializeElements();
         this.setupEventListeners();
@@ -150,6 +152,10 @@ class PixelClickerApp {
     // 代理方法，让模块可以调用主应用的方法
     renderImage() {
         this.imageRenderer.renderImage();
+        // 渲染完成后重绘标记点
+        setTimeout(() => {
+            this.clickHandler.redrawAllMarkers();
+        }, 10);
     }
     
     processClick(clientX, clientY) {
@@ -174,6 +180,11 @@ class PixelClickerApp {
             this.zoomInBtn.disabled = this.zoom >= 10;
             this.zoomOutBtn.disabled = this.zoom <= 0.1;
         }
+        
+        // 重绘标记点
+        setTimeout(() => {
+            this.clickHandler.redrawAllMarkers();
+        }, 10);
     }
     
     updateCoordinates(x, y) {
@@ -200,7 +211,11 @@ class PixelClickerApp {
     }
 }
 
+// 全局变量，供HTML中的onclick事件使用
+let app;
+
 // 页面加载完成后初始化应用
 document.addEventListener('DOMContentLoaded', () => {
-    new PixelClickerApp();
+    app = new PixelClickerApp();
+    window.app = app; // 使应用全局可访问
 }); 

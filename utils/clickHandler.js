@@ -25,14 +25,22 @@ export class ClickHandler {
             const userX = originalX + 1;
             const userY = originalY + 1;
             
-            // 复制到剪切板
-            this.copyToClipboard(`${userX},${userY}`);
+            // 添加坐标到坐标管理器
+            const success = this.app.coordinateManager.addCoordinate(userX, userY);
             
-            // 更新显示
-            this.app.updateCoordinates(userX, userY);
-            
-            // 绘制点击标记
-            this.drawClickMarker(canvasX, canvasY);
+            if (success) {
+                // 更新显示
+                this.app.updateCoordinates(userX, userY);
+                
+                // 绘制点击标记
+                this.drawClickMarker(canvasX, canvasY);
+                
+                this.app.updateStatus(`标记点已添加: (${userX}, ${userY})`);
+            } else {
+                this.app.updateStatus('无法添加标记点');
+            }
+        } else {
+            this.app.updateStatus('请点击地图内的位置');
         }
     }
 
@@ -40,15 +48,26 @@ export class ClickHandler {
         // 保存当前状态
         this.app.ctx.save();
         
-        // 绘制十字标记
+        // 绘制标记点
         this.app.ctx.strokeStyle = 'red';
+        this.app.ctx.fillStyle = 'red';
         this.app.ctx.lineWidth = Math.max(2, this.app.zoom);
+        
+        // 绘制圆形标记
         this.app.ctx.beginPath();
-        const markerSize = Math.max(8, this.app.zoom * 4);
-        this.app.ctx.moveTo(x - markerSize, y);
-        this.app.ctx.lineTo(x + markerSize, y);
-        this.app.ctx.moveTo(x, y - markerSize);
-        this.app.ctx.lineTo(x, y + markerSize);
+        const markerRadius = Math.max(4, this.app.zoom * 2);
+        this.app.ctx.arc(x, y, markerRadius, 0, 2 * Math.PI);
+        this.app.ctx.fill();
+        
+        // 绘制十字标记
+        this.app.ctx.strokeStyle = 'white';
+        this.app.ctx.lineWidth = Math.max(1, this.app.zoom * 0.5);
+        this.app.ctx.beginPath();
+        const crossSize = Math.max(6, this.app.zoom * 3);
+        this.app.ctx.moveTo(x - crossSize, y);
+        this.app.ctx.lineTo(x + crossSize, y);
+        this.app.ctx.moveTo(x, y - crossSize);
+        this.app.ctx.lineTo(x, y + crossSize);
         this.app.ctx.stroke();
         
         // 添加触摸反馈动画（移动端）
@@ -59,10 +78,54 @@ export class ClickHandler {
         // 恢复状态
         this.app.ctx.restore();
         
-        // 2秒后重新渲染图片移除标记
+        // 3秒后重新渲染图片移除标记
         setTimeout(() => {
             this.app.imageRenderer.renderImage();
-        }, 2000);
+            this.redrawAllMarkers();
+        }, 3000);
+    }
+
+    // 重绘所有标记点
+    redrawAllMarkers() {
+        const coordinates = this.app.coordinateManager.getCoordinates();
+        
+        coordinates.forEach(coord => {
+            // 转换坐标到画布坐标
+            const canvasX = (coord.x - 1) * this.app.zoom + this.app.offsetX;
+            const canvasY = (coord.y - 1) * this.app.zoom + this.app.offsetY;
+            
+            // 检查是否在可见区域内
+            if (canvasX >= 0 && canvasX <= this.app.canvas.width &&
+                canvasY >= 0 && canvasY <= this.app.canvas.height) {
+                
+                this.drawPermanentMarker(canvasX, canvasY, coord.isPlayer);
+            }
+        });
+    }
+
+    // 绘制永久标记点
+    drawPermanentMarker(x, y, isPlayer = false) {
+        this.app.ctx.save();
+        
+        // 根据是否是Player使用不同颜色
+        const color = isPlayer ? '#007cba' : '#28a745';
+        
+        this.app.ctx.strokeStyle = color;
+        this.app.ctx.fillStyle = color;
+        this.app.ctx.lineWidth = Math.max(1, this.app.zoom * 0.8);
+        
+        // 绘制圆形标记
+        this.app.ctx.beginPath();
+        const markerRadius = Math.max(3, this.app.zoom * 1.5);
+        this.app.ctx.arc(x, y, markerRadius, 0, 2 * Math.PI);
+        this.app.ctx.fill();
+        
+        // 绘制边框
+        this.app.ctx.strokeStyle = 'white';
+        this.app.ctx.lineWidth = Math.max(0.5, this.app.zoom * 0.3);
+        this.app.ctx.stroke();
+        
+        this.app.ctx.restore();
     }
 
     addTouchFeedback(x, y) {
@@ -88,48 +151,5 @@ export class ClickHandler {
                 feedback.parentNode.removeChild(feedback);
             }
         }, 600);
-    }
-
-    async copyToClipboard(text) {
-        try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(text);
-                this.app.updateStatus(`坐标 ${text} 已复制到剪切板`);
-            } else {
-                // 移动端备用方案
-                if (this.app.isMobile()) {
-                    // 创建临时输入框
-                    const textArea = document.createElement('textarea');
-                    textArea.value = text;
-                    textArea.style.position = 'fixed';
-                    textArea.style.left = '-999999px';
-                    textArea.style.top = '-999999px';
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    
-                    try {
-                        document.execCommand('copy');
-                        this.app.updateStatus(`坐标 ${text} 已复制到剪切板`);
-                    } catch (err) {
-                        this.app.updateStatus(`坐标 ${text} (请手动复制)`);
-                    }
-                    
-                    document.body.removeChild(textArea);
-                } else {
-                    // 桌面端备用方案
-                    const textArea = document.createElement('textarea');
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    this.app.updateStatus(`坐标 ${text} 已复制到剪切板`);
-                }
-            }
-        } catch (err) {
-            console.error('复制失败:', err);
-            this.app.updateStatus(`坐标 ${text} (复制失败，请手动复制)`);
-        }
     }
 } 
