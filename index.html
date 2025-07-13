@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>像素点击器</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            touch-action: manipulation;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        .controls {
+            margin-bottom: 15px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .upload-section {
+            margin-bottom: 15px;
+            padding: 15px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+            background: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section.drag-over {
+            border-color: #007cba;
+            background: #e8f4f8;
+        }
+        
+        .upload-section input[type="file"] {
+            margin: 10px 0;
+        }
+        
+        .zoom-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .canvas-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: auto;
+            max-height: 70vh;
+            position: relative;
+            touch-action: pan-x pan-y;
+        }
+        
+        #canvas {
+            border: 1px solid #ccc;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        button {
+            padding: 12px 20px;
+            margin: 4px;
+            border: none;
+            border-radius: 6px;
+            background: #007cba;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            min-height: 44px;
+            min-width: 44px;
+            touch-action: manipulation;
+            transition: background 0.2s ease;
+        }
+        
+        button:hover {
+            background: #005a87;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        button:active {
+            transform: scale(0.95);
+        }
+        
+        .zoom-level {
+            font-weight: bold;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+        
+        .mobile-instructions {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #856404;
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            
+            .container {
+                padding: 0;
+            }
+            
+            .controls {
+                padding: 10px;
+            }
+            
+            .zoom-controls {
+                justify-content: center;
+            }
+            
+            button {
+                padding: 15px 18px;
+                font-size: 16px;
+                min-height: 48px;
+                min-width: 48px;
+            }
+            
+            .canvas-container {
+                max-height: 60vh;
+            }
+            
+            .mobile-instructions {
+                display: block;
+            }
+            
+            .info {
+                font-size: 16px;
+            }
+            
+            .zoom-level {
+                font-size: 16px;
+            }
+        }
+        
+        /* 小屏幕优化 */
+        @media (max-width: 480px) {
+            .zoom-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .zoom-controls > div {
+                display: flex;
+                justify-content: center;
+                margin: 5px 0;
+            }
+            
+            button {
+                flex: 1;
+                max-width: 120px;
+            }
+            
+            .zoom-level {
+                text-align: center;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>像素点击器</h1>
+        
+        <div class="controls">
+            <div class="upload-section" id="uploadSection">
+                <div>选择或拖拽图片文件</div>
+                <input type="file" id="imageUpload" accept="image/*">
+                <div>
+                    <button id="uploadBtn" disabled>上传图片</button>
+                </div>
+            </div>
+            
+            <div class="zoom-controls">
+                <div>
+                    <button id="zoomIn">放大 (+)</button>
+                    <button id="zoomOut">缩小 (-)</button>
+                    <button id="resetZoom">重置缩放</button>
+                </div>
+                <span id="zoomLevel" class="zoom-level">缩放: 100%</span>
+            </div>
+        </div>
+        
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="info">
+            <div>点击任意像素获取坐标</div>
+            <div class="mobile-instructions">
+                移动端提示：单指点击获取坐标，双指缩放图片
+            </div>
+            <div id="coordinates">坐标: 未选择</div>
+            <div id="status">状态: 请选择并上传图片</div>
+        </div>
+    </div>
+    
+    <script src="maker.js"></script>
+</body>
+</html> 
