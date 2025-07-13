@@ -8,11 +8,28 @@ class PixelClickerApp {
         this.originalWidth = 0;
         this.originalHeight = 0;
         
+        // 图片偏移量
+        this.offsetX = 0;
+        this.offsetY = 0;
+        
         // 触摸相关变量
         this.lastTouchDistance = 0;
         this.touchStartZoom = 1;
         this.isTouching = false;
         this.touchStartTime = 0;
+        
+        // 平移相关变量
+        this.isPanning = false;
+        this.panStartX = 0;
+        this.panStartY = 0;
+        this.panStartOffsetX = 0;
+        this.panStartOffsetY = 0;
+        this.touchStartX = 0;
+        this.touchStartY = 0;
+        
+        // 缩放中心点
+        this.zoomCenterX = 0;
+        this.zoomCenterY = 0;
         
         this.initializeElements();
         this.setupEventListeners();
@@ -86,24 +103,65 @@ class PixelClickerApp {
         const scaledWidth = this.originalWidth * this.zoom;
         const scaledHeight = this.originalHeight * this.zoom;
         
-        // 设置 canvas 尺寸
-        this.canvas.width = scaledWidth;
-        this.canvas.height = scaledHeight;
+        // 获取容器尺寸
+        const containerRect = this.canvasContainer.getBoundingClientRect();
+        const containerWidth = containerRect.width;
+        const containerHeight = containerRect.height;
+        
+        // 设置 canvas 尺寸为容器尺寸或图片尺寸中的较大者
+        this.canvas.width = Math.max(containerWidth, scaledWidth);
+        this.canvas.height = Math.max(containerHeight, scaledHeight);
         
         // 清空画布
-        this.ctx.clearRect(0, 0, scaledWidth, scaledHeight);
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // 绘制图片
+        // 限制偏移量范围
+        this.limitOffset();
+        
+        // 绘制图片（考虑偏移量）
         this.ctx.imageSmoothingEnabled = false; // 保持像素清晰
-        this.ctx.drawImage(this.image, 0, 0, scaledWidth, scaledHeight);
+        this.ctx.drawImage(
+            this.image, 
+            this.offsetX, 
+            this.offsetY, 
+            scaledWidth, 
+            scaledHeight
+        );
         
         // 获取图像数据用于像素检测
-        this.imageData = this.ctx.getImageData(0, 0, scaledWidth, scaledHeight);
+        this.imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
         
         // 自动补全不齐全的像素（如果需要）
         this.fillTransparentPixels();
         
         this.updateStatus(`图片渲染完成 (${this.originalWidth}x${this.originalHeight})`);
+    }
+    
+    limitOffset() {
+        if (!this.image) return;
+        
+        const scaledWidth = this.originalWidth * this.zoom;
+        const scaledHeight = this.originalHeight * this.zoom;
+        const containerRect = this.canvasContainer.getBoundingClientRect();
+        const containerWidth = containerRect.width;
+        const containerHeight = containerRect.height;
+        
+        // 限制偏移量，确保图片不会超出合理范围
+        if (scaledWidth <= containerWidth) {
+            // 图片小于容器时居中
+            this.offsetX = (containerWidth - scaledWidth) / 2;
+        } else {
+            // 图片大于容器时允许平移，但限制范围
+            this.offsetX = Math.min(0, Math.max(containerWidth - scaledWidth, this.offsetX));
+        }
+        
+        if (scaledHeight <= containerHeight) {
+            // 图片小于容器时居中
+            this.offsetY = (containerHeight - scaledHeight) / 2;
+        } else {
+            // 图片大于容器时允许平移，但限制范围
+            this.offsetY = Math.min(0, Math.max(containerHeight - scaledHeight, this.offsetY));
+        }
     }
     
     fillTransparentPixels() {
@@ -258,17 +316,63 @@ class PixelClickerApp {
         this.isTouching = true;
         this.touchStartTime = Date.now();
         
-        if (e.touches.length === 2) {
+        if (e.touches.length === 1) {
+            // 单指触摸 - 准备平移或点击
+            const touch = e.touches[0];
+            this.touchStartX = touch.clientX;
+            this.touchStartY = touch.clientY;
+            this.panStartX = touch.clientX;
+            this.panStartY = touch.clientY;
+            this.panStartOffsetX = this.offsetX;
+            this.panStartOffsetY = this.offsetY;
+            this.isPanning = false;
+            
+            // 调试信息
+            console.log(`触摸开始: startX=${this.panStartX}, startY=${this.panStartY}, offsetX=${this.panStartOffsetX}, offsetY=${this.panStartOffsetY}`);
+        } else if (e.touches.length === 2) {
             // 双指缩放开始
             this.lastTouchDistance = this.getTouchDistance(e.touches);
             this.touchStartZoom = this.zoom;
+            
+            // 计算缩放中心点
+            const rect = this.canvas.getBoundingClientRect();
+            this.zoomCenterX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+            this.zoomCenterY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+            
+            this.isPanning = false;
         }
     }
     
     handleTouchMove(e) {
         if (!this.image || !this.isTouching) return;
         
-        if (e.touches.length === 2) {
+        if (e.touches.length === 1) {
+            // 单指平移
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - this.panStartX;
+            const deltaY = touch.clientY - this.panStartY;
+            
+            // 判断是否开始平移（移动距离超过阈值）
+            const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (moveDistance > 5) { // 降低阈值，更容易触发平移
+                this.isPanning = true;
+            }
+            
+            if (this.isPanning) {
+                // 计算新的偏移量
+                const newOffsetX = this.panStartOffsetX + deltaX;
+                const newOffsetY = this.panStartOffsetY + deltaY;
+                
+                // 临时设置偏移量以便limitOffset处理
+                this.offsetX = newOffsetX;
+                this.offsetY = newOffsetY;
+                
+                // 调试信息
+                console.log(`平移中: deltaX=${deltaX}, deltaY=${deltaY}, offsetX=${this.offsetX}, offsetY=${this.offsetY}`);
+                
+                this.renderImage();
+            }
+        } else if (e.touches.length === 2) {
             // 双指缩放
             const currentDistance = this.getTouchDistance(e.touches);
             if (this.lastTouchDistance > 0) {
@@ -276,7 +380,14 @@ class PixelClickerApp {
                 const newZoom = this.touchStartZoom * scale;
                 
                 // 限制缩放范围
+                const oldZoom = this.zoom;
                 this.zoom = Math.min(Math.max(newZoom, 0.1), 10);
+                
+                // 计算缩放后的偏移调整（以缩放中心点为准）
+                const zoomRatio = this.zoom / oldZoom;
+                this.offsetX = this.zoomCenterX - (this.zoomCenterX - this.offsetX) * zoomRatio;
+                this.offsetY = this.zoomCenterY - (this.zoomCenterY - this.offsetY) * zoomRatio;
+                
                 this.renderImage();
                 this.updateZoomLevel();
             }
@@ -288,24 +399,38 @@ class PixelClickerApp {
         
         const touchDuration = Date.now() - this.touchStartTime;
         
-        if (e.touches.length === 0 && touchDuration < 300) {
-            // 单指快速点击
-            const touch = e.changedTouches[0];
-            this.processClick(touch.clientX, touch.clientY);
+        if (e.touches.length === 0) {
+            // 所有手指离开
+            if (!this.isPanning && touchDuration < 300) {
+                // 快速点击且没有平移
+                const touch = e.changedTouches[0];
+                const deltaX = touch.clientX - this.touchStartX;
+                const deltaY = touch.clientY - this.touchStartY;
+                const moveDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                
+                if (moveDistance < 5) { // 与平移阈值保持一致
+                    this.processClick(touch.clientX, touch.clientY);
+                }
+            }
+            
+            this.isTouching = false;
+            this.isPanning = false;
+            this.lastTouchDistance = 0;
         }
-        
-        this.isTouching = false;
-        this.lastTouchDistance = 0;
     }
     
     processClick(clientX, clientY) {
         const rect = this.canvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
+        const canvasX = clientX - rect.left;
+        const canvasY = clientY - rect.top;
         
-        // 转换为原始图像坐标（考虑缩放）
-        const originalX = Math.floor(x / this.zoom);
-        const originalY = Math.floor(y / this.zoom);
+        // 转换为图片坐标（考虑偏移量和缩放）
+        const imageX = (canvasX - this.offsetX) / this.zoom;
+        const imageY = (canvasY - this.offsetY) / this.zoom;
+        
+        // 转换为原始图像坐标
+        const originalX = Math.floor(imageX);
+        const originalY = Math.floor(imageY);
         
         // 检查坐标是否在图像范围内
         if (originalX >= 0 && originalX < this.originalWidth && 
@@ -322,7 +447,7 @@ class PixelClickerApp {
             this.updateCoordinates(userX, userY);
             
             // 绘制点击标记
-            this.drawClickMarker(x, y);
+            this.drawClickMarker(canvasX, canvasY);
         }
     }
     
@@ -334,12 +459,17 @@ class PixelClickerApp {
         this.ctx.strokeStyle = 'red';
         this.ctx.lineWidth = Math.max(2, this.zoom);
         this.ctx.beginPath();
-        const markerSize = Math.max(5, this.zoom * 3);
+        const markerSize = Math.max(8, this.zoom * 4);
         this.ctx.moveTo(x - markerSize, y);
         this.ctx.lineTo(x + markerSize, y);
         this.ctx.moveTo(x, y - markerSize);
         this.ctx.lineTo(x, y + markerSize);
         this.ctx.stroke();
+        
+        // 添加触摸反馈动画（移动端）
+        if (this.isMobile()) {
+            this.addTouchFeedback(x, y);
+        }
         
         // 恢复状态
         this.ctx.restore();
@@ -350,6 +480,31 @@ class PixelClickerApp {
         }, 2000);
     }
     
+    addTouchFeedback(x, y) {
+        // 创建触摸反馈圆圈
+        const feedback = document.createElement('div');
+        feedback.style.position = 'absolute';
+        feedback.style.left = (x - 20) + 'px';
+        feedback.style.top = (y - 20) + 'px';
+        feedback.style.width = '40px';
+        feedback.style.height = '40px';
+        feedback.style.borderRadius = '50%';
+        feedback.style.backgroundColor = 'rgba(0, 124, 186, 0.3)';
+        feedback.style.border = '2px solid rgba(0, 124, 186, 0.6)';
+        feedback.style.pointerEvents = 'none';
+        feedback.style.zIndex = '1000';
+        feedback.className = 'touch-ripple';
+        
+        this.canvasContainer.appendChild(feedback);
+        
+        // 动画结束后移除元素
+        setTimeout(() => {
+            if (feedback.parentNode) {
+                feedback.parentNode.removeChild(feedback);
+            }
+        }, 600);
+    }
+
     async copyToClipboard(text) {
         try {
             if (navigator.clipboard && window.isSecureContext) {
@@ -400,7 +555,18 @@ class PixelClickerApp {
     
     zoomIn() {
         if (this.zoom < 10) {
+            const oldZoom = this.zoom;
             this.zoom = Math.min(this.zoom * 1.5, 10);
+            
+            // 以画布中心为缩放中心
+            const rect = this.canvas.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const zoomRatio = this.zoom / oldZoom;
+            this.offsetX = centerX - (centerX - this.offsetX) * zoomRatio;
+            this.offsetY = centerY - (centerY - this.offsetY) * zoomRatio;
+            
             this.renderImage();
             this.updateZoomLevel();
         }
@@ -408,7 +574,18 @@ class PixelClickerApp {
     
     zoomOut() {
         if (this.zoom > 0.1) {
+            const oldZoom = this.zoom;
             this.zoom = Math.max(this.zoom / 1.5, 0.1);
+            
+            // 以画布中心为缩放中心
+            const rect = this.canvas.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const zoomRatio = this.zoom / oldZoom;
+            this.offsetX = centerX - (centerX - this.offsetX) * zoomRatio;
+            this.offsetY = centerY - (centerY - this.offsetY) * zoomRatio;
+            
             this.renderImage();
             this.updateZoomLevel();
         }
@@ -416,6 +593,8 @@ class PixelClickerApp {
     
     resetZoom() {
         this.zoom = 1;
+        this.offsetX = 0;
+        this.offsetY = 0;
         this.renderImage();
         this.updateZoomLevel();
     }
@@ -437,6 +616,14 @@ class PixelClickerApp {
     
     updateStatus(message) {
         this.statusDiv.textContent = `状态: ${message}`;
+        
+        // 移动端状态提示更明显
+        if (this.isMobile()) {
+            this.statusDiv.style.animation = 'none';
+            setTimeout(() => {
+                this.statusDiv.style.animation = 'touchFeedback 0.3s ease';
+            }, 10);
+        }
     }
 }
 
