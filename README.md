@@ -1,2 +1,61 @@
-# TerraMapForge
-A powerful visual scenario builder for Territorial.io — design bots, spawn points, teams, and custom maps with revolutionary precision.
+# 像素点击器 - 重构版本
+
+## 项目结构
+
+```
+├── index.html          # 主页面
+├── main.js            # 主应用文件
+├── maker.js           # 旧版本（保留备份）
+├── utils/             # 工具模块目录
+│   ├── eventHandlers.js    # 事件处理模块
+│   ├── imageRenderer.js    # 图像渲染模块
+│   ├── clickHandler.js     # 点击处理模块
+│   └── zoomController.js   # 缩放控制模块
+└── README.md          # 项目说明
+```
+
+## 模块说明
+
+### 主应用 (`main.js`)
+- 应用初始化和基本配置
+- 文件上传和拖拽功能
+- DOM元素管理
+- 模块间协调
+
+### 事件处理模块 (`utils/eventHandlers.js`)
+- 指针事件（现代浏览器）
+- 鼠标事件（兼容性回退）
+- 触摸事件（移动端）
+- 触摸板手势事件
+- 滚轮缩放事件
+
+### 图像渲染模块 (`utils/imageRenderer.js`)
+- 图像文件加载
+- Canvas渲染逻辑
+- 偏移量限制
+- 透明像素处理
+
+### 点击处理模块 (`utils/clickHandler.js`)
+- 坐标计算和转换
+- 点击标记绘制
+- 剪切板操作
+- 触摸反馈动画
+
+### 缩放控制模块 (`utils/zoomController.js`)
+- 缩放功能实现
+- 光标样式管理
+- 缩放中心点计算
+
+## 优势
+
+1. **模块化**: 代码按功能分离，易于维护
+2. **可扩展**: 新功能可以独立开发
+3. **可读性**: 单个文件代码量减少
+4. **可测试**: 模块可以独立测试
+5. **复用性**: 模块可以在其他项目中复用
+
+## 使用方法
+
+直接在现代浏览器中打开 `index.html` 即可使用。
+
+**注意**: 由于使用了ES6模块，需要通过HTTP服务器访问，不能直接用file://协议打开。
