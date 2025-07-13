@@ -2,6 +2,11 @@
 export class ImageRenderer {
     constructor(app) {
         this.app = app;
+        this.renderRequestId = null;
+        this.cachedImageData = null;
+        this.lastRenderTime = 0;
+        this.renderThrottleMs = 16; // 约60fps
+        this.maxCanvasSize = 4096; // 限制canvas最大尺寸
     }
 
     loadImageFromFile(file) {
@@ -13,6 +18,9 @@ export class ImageRenderer {
             this.app.image.onload = () => {
                 this.app.originalWidth = this.app.image.width;
                 this.app.originalHeight = this.app.image.height;
+                
+                // 清除缓存
+                this.cachedImageData = null;
                 
                 this.app.updateStatus('图片加载完成');
                 this.renderImage();
@@ -36,6 +44,27 @@ export class ImageRenderer {
         reader.readAsDataURL(file);
     }
 
+    // 节流渲染，避免频繁重绘
+    requestRender() {
+        if (this.renderRequestId) {
+            cancelAnimationFrame(this.renderRequestId);
+        }
+        
+        this.renderRequestId = requestAnimationFrame(() => {
+            const now = Date.now();
+            if (now - this.lastRenderTime >= this.renderThrottleMs) {
+                this.renderImage();
+                this.lastRenderTime = now;
+            } else {
+                // 如果调用太频繁，延迟到下一帧
+                this.renderRequestId = requestAnimationFrame(() => {
+                    this.renderImage();
+                    this.lastRenderTime = Date.now();
+                });
+            }
+        });
+    }
+
     renderImage() {
         if (!this.app.image) return;
         
@@ -48,9 +77,22 @@ export class ImageRenderer {
         const containerWidth = containerRect.width;
         const containerHeight = containerRect.height;
         
-        // 设置 canvas 尺寸为容器尺寸或图片尺寸中的较大者
-        this.app.canvas.width = Math.max(containerWidth, scaledWidth);
-        this.app.canvas.height = Math.max(containerHeight, scaledHeight);
+        // 智能设置canvas尺寸，避免过大
+        const canvasWidth = Math.min(
+            Math.max(containerWidth, Math.min(scaledWidth, this.maxCanvasSize)),
+            this.maxCanvasSize
+        );
+        const canvasHeight = Math.min(
+            Math.max(containerHeight, Math.min(scaledHeight, this.maxCanvasSize)),
+            this.maxCanvasSize
+        );
+        
+        // 只在尺寸变化时重新设置canvas
+        if (this.app.canvas.width !== canvasWidth || this.app.canvas.height !== canvasHeight) {
+            this.app.canvas.width = canvasWidth;
+            this.app.canvas.height = canvasHeight;
+            this.cachedImageData = null; // 清除缓存
+        }
         
         // 清空画布
         this.app.ctx.clearRect(0, 0, this.app.canvas.width, this.app.canvas.height);
@@ -60,21 +102,47 @@ export class ImageRenderer {
         
         // 绘制图片（考虑偏移量）
         this.app.ctx.imageSmoothingEnabled = false; // 保持像素清晰
-        this.app.ctx.drawImage(
-            this.app.image, 
-            this.app.offsetX, 
-            this.app.offsetY, 
-            scaledWidth, 
-            scaledHeight
-        );
         
-        // 获取图像数据用于像素检测
-        this.app.imageData = this.app.ctx.getImageData(0, 0, this.app.canvas.width, this.app.canvas.height);
+        // 计算实际绘制区域，避免绘制看不见的部分
+        const drawX = Math.max(0, this.app.offsetX);
+        const drawY = Math.max(0, this.app.offsetY);
+        const drawWidth = Math.min(scaledWidth, this.app.canvas.width - drawX);
+        const drawHeight = Math.min(scaledHeight, this.app.canvas.height - drawY);
         
-        // 自动补全不齐全的像素（如果需要）
-        this.fillTransparentPixels();
+        // 计算源图像的对应区域
+        const srcX = Math.max(0, -this.app.offsetX / this.app.zoom);
+        const srcY = Math.max(0, -this.app.offsetY / this.app.zoom);
+        const srcWidth = Math.min(this.app.originalWidth - srcX, drawWidth / this.app.zoom);
+        const srcHeight = Math.min(this.app.originalHeight - srcY, drawHeight / this.app.zoom);
         
-        this.app.updateStatus(`图片渲染完成 (${this.app.originalWidth}x${this.app.originalHeight})`);
+        if (srcWidth > 0 && srcHeight > 0) {
+            this.app.ctx.drawImage(
+                this.app.image,
+                srcX, srcY, srcWidth, srcHeight,
+                drawX, drawY, drawWidth, drawHeight
+            );
+        }
+        
+        // 延迟获取图像数据，避免每次都获取
+        this.scheduleImageDataUpdate();
+        
+        this.app.updateStatus(`图片渲染完成 (${this.app.originalWidth}x${this.app.originalHeight}) 缩放: ${Math.round(this.app.zoom * 100)}%`);
+    }
+
+    // 延迟更新图像数据
+    scheduleImageDataUpdate() {
+        if (this.imageDataUpdateTimeout) {
+            clearTimeout(this.imageDataUpdateTimeout);
+        }
+        
+        this.imageDataUpdateTimeout = setTimeout(() => {
+            try {
+                this.app.imageData = this.app.ctx.getImageData(0, 0, this.app.canvas.width, this.app.canvas.height);
+                this.fillTransparentPixels();
+            } catch (e) {
+                console.warn('无法获取图像数据:', e);
+            }
+        }, 100); // 100ms后更新
     }
 
     limitOffset() {
@@ -107,11 +175,15 @@ export class ImageRenderer {
     fillTransparentPixels() {
         if (!this.app.imageData) return;
         
+        // 避免重复处理
+        if (this.cachedImageData === this.app.imageData) return;
+        
         const data = this.app.imageData.data;
         let hasTransparency = false;
         
-        // 检查是否有透明像素
-        for (let i = 3; i < data.length; i += 4) {
+        // 检查是否有透明像素（只检查部分像素以提高性能）
+        const step = Math.max(1, Math.floor(data.length / 40000)); // 采样检查
+        for (let i = 3; i < data.length; i += 4 * step) {
             if (data[i] === 0) {
                 hasTransparency = true;
                 break;
@@ -133,5 +205,22 @@ export class ImageRenderer {
             this.app.ctx.putImageData(this.app.imageData, 0, 0);
             this.app.updateStatus('已自动补全透明像素');
         }
+        
+        this.cachedImageData = this.app.imageData;
+    }
+
+    // 清理资源
+    cleanup() {
+        if (this.renderRequestId) {
+            cancelAnimationFrame(this.renderRequestId);
+            this.renderRequestId = null;
+        }
+        
+        if (this.imageDataUpdateTimeout) {
+            clearTimeout(this.imageDataUpdateTimeout);
+            this.imageDataUpdateTimeout = null;
+        }
+        
+        this.cachedImageData = null;
     }
 } 

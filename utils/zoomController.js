@@ -18,7 +18,7 @@ export class ZoomController {
             this.app.offsetX = centerX - (centerX - this.app.offsetX) * zoomRatio;
             this.app.offsetY = centerY - (centerY - this.app.offsetY) * zoomRatio;
             
-            this.app.imageRenderer.renderImage();
+            this.app.imageRenderer.requestRender();
             this.app.updateZoomLevel();
         }
     }
@@ -37,7 +37,7 @@ export class ZoomController {
             this.app.offsetX = centerX - (centerX - this.app.offsetX) * zoomRatio;
             this.app.offsetY = centerY - (centerY - this.app.offsetY) * zoomRatio;
             
-            this.app.imageRenderer.renderImage();
+            this.app.imageRenderer.requestRender();
             this.app.updateZoomLevel();
         }
     }
@@ -46,7 +46,7 @@ export class ZoomController {
         this.app.zoom = 1;
         this.app.offsetX = 0;
         this.app.offsetY = 0;
-        this.app.imageRenderer.renderImage();
+        this.app.imageRenderer.requestRender();
         this.app.updateZoomLevel();
     }
 

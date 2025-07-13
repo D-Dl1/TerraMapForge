@@ -27,6 +27,9 @@ class PixelClickerApp {
         this.initializeElements();
         this.setupEventListeners();
         this.updateStatus('请选择并上传图片');
+        
+        // 页面卸载时清理资源
+        window.addEventListener('beforeunload', () => this.cleanup());
     }
     
     initializeElements() {
@@ -186,6 +189,13 @@ class PixelClickerApp {
             setTimeout(() => {
                 this.statusDiv.style.animation = 'touchFeedback 0.3s ease';
             }, 10);
+        }
+    }
+    
+    // 清理资源
+    cleanup() {
+        if (this.imageRenderer) {
+            this.imageRenderer.cleanup();
         }
     }
 }

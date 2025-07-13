@@ -22,6 +22,10 @@ export class EventHandlers {
         this.touchStartZoom = 1;
         this.zoomCenterX = 0;
         this.zoomCenterY = 0;
+        
+        // 性能优化
+        this.lastMoveTime = 0;
+        this.moveThrottleMs = 16; // 约60fps
     }
 
     setupCanvasInteraction() {
@@ -71,6 +75,15 @@ export class EventHandlers {
         canvas.addEventListener('gesturestart', (e) => e.preventDefault());
         canvas.addEventListener('gesturechange', (e) => e.preventDefault());
         canvas.addEventListener('gestureend', (e) => e.preventDefault());
+    }
+
+    // 节流移动事件处理
+    throttledRender() {
+        const now = Date.now();
+        if (now - this.lastMoveTime >= this.moveThrottleMs) {
+            this.app.imageRenderer.requestRender();
+            this.lastMoveTime = now;
+        }
     }
 
     // 指针事件处理
@@ -125,7 +138,7 @@ export class EventHandlers {
             this.app.offsetX = this.dragStartOffsetX + deltaX;
             this.app.offsetY = this.dragStartOffsetY + deltaY;
             
-            this.app.renderImage();
+            this.throttledRender();
         } else if (this.activePointers.size === 2) {
             this.handleMultiPointerZoom();
         } else if (!this.isPointerDragging) {
@@ -163,7 +176,7 @@ export class EventHandlers {
             this.app.offsetX = canvasCenterX - (canvasCenterX - this.app.offsetX) * zoomRatio;
             this.app.offsetY = canvasCenterY - (canvasCenterY - this.app.offsetY) * zoomRatio;
             
-            this.app.renderImage();
+            this.throttledRender();
             this.app.updateZoomLevel();
         }
     }
@@ -176,6 +189,8 @@ export class EventHandlers {
         if (this.activePointers.size === 0) {
             this.isPointerDragging = false;
             this.app.updateCursorStyle();
+            // 最终渲染确保完整性
+            this.app.imageRenderer.requestRender();
         } else if (this.activePointers.size === 1) {
             const remainingPointer = this.activePointers.values().next().value;
             this.dragStartX = remainingPointer.x;
@@ -220,7 +235,7 @@ export class EventHandlers {
             this.app.offsetX = this.dragStartOffsetX + deltaX;
             this.app.offsetY = this.dragStartOffsetY + deltaY;
             
-            this.app.renderImage();
+            this.throttledRender();
         } else {
             this.app.updateCursorStyle();
         }
@@ -231,6 +246,8 @@ export class EventHandlers {
         
         this.isDragging = false;
         this.app.updateCursorStyle();
+        // 最终渲染确保完整性
+        this.app.imageRenderer.requestRender();
     }
 
     handleWheel(e) {
@@ -262,7 +279,7 @@ export class EventHandlers {
         this.app.offsetX = mouseX - (mouseX - this.app.offsetX) * zoomRatio;
         this.app.offsetY = mouseY - (mouseY - this.app.offsetY) * zoomRatio;
         
-        this.app.renderImage();
+        this.app.imageRenderer.requestRender();
         this.app.updateZoomLevel();
     }
 
@@ -290,13 +307,15 @@ export class EventHandlers {
         this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.app.offsetX) * zoomRatio;
         this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.app.offsetY) * zoomRatio;
         
-        this.app.renderImage();
+        this.throttledRender();
         this.app.updateZoomLevel();
     }
 
     handleGestureEnd(e) {
         if (!this.app.image) return;
         e.preventDefault();
+        // 最终渲染确保完整性
+        this.app.imageRenderer.requestRender();
     }
 
     handleTouchStart(e) {
@@ -346,7 +365,7 @@ export class EventHandlers {
                 this.app.offsetX = newOffsetX;
                 this.app.offsetY = newOffsetY;
                 
-                this.app.renderImage();
+                this.throttledRender();
             }
         } else if (e.touches.length === 2) {
             const currentDistance = this.getTouchDistance(e.touches);
@@ -361,7 +380,7 @@ export class EventHandlers {
                 this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.app.offsetX) * zoomRatio;
                 this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.app.offsetY) * zoomRatio;
                 
-                this.app.renderImage();
+                this.throttledRender();
                 this.app.updateZoomLevel();
             }
         }
@@ -387,6 +406,9 @@ export class EventHandlers {
             this.isTouching = false;
             this.isPanning = false;
             this.lastTouchDistance = 0;
+            
+            // 最终渲染确保完整性
+            this.app.imageRenderer.requestRender();
         }
     }
 
