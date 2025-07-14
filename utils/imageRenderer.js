@@ -49,16 +49,30 @@ export class ImageRenderer {
         const containerWidth = containerRect.width;
         const containerHeight = containerRect.height;
         
-        // 设置 canvas 尺寸为容器尺寸
-        if (this.app.canvas.width !== containerWidth || this.app.canvas.height !== containerHeight) {
-            this.app.canvas.width = containerWidth;
-            this.app.canvas.height = containerHeight;
-            this.app.canvas.style.width = containerWidth + 'px';
-            this.app.canvas.style.height = containerHeight + 'px';
+        // 获取设备像素比例（移动端重要）
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        
+        // 设置canvas尺寸
+        const canvasWidth = containerWidth;
+        const canvasHeight = containerHeight;
+        
+        if (this.app.canvas.width !== canvasWidth * devicePixelRatio || 
+            this.app.canvas.height !== canvasHeight * devicePixelRatio) {
+            
+            // 设置实际分辨率（高DPI支持）
+            this.app.canvas.width = canvasWidth * devicePixelRatio;
+            this.app.canvas.height = canvasHeight * devicePixelRatio;
+            
+            // 设置显示尺寸
+            this.app.canvas.style.width = canvasWidth + 'px';
+            this.app.canvas.style.height = canvasHeight + 'px';
+            
+            // 缩放绘图上下文以匹配设备像素比例
+            this.app.ctx.scale(devicePixelRatio, devicePixelRatio);
         }
         
         // 清空画布
-        this.app.ctx.clearRect(0, 0, this.app.canvas.width, this.app.canvas.height);
+        this.app.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         
         // 限制偏移量范围
         this.limitOffset();

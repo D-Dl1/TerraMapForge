@@ -16,10 +16,8 @@ export class CoordinateManager {
     }
     
     initializeDefault() {
-        // 只在移动端默认添加Player坐标点
-        if (this.app.isMobile()) {
-            this.addCoordinate(0, 0, 'Player', true);
-        }
+        // 默认添加Player坐标点（电脑端和移动端都添加）
+        this.addCoordinate(0, 0, 'Player', true);
     }
     
     setupEventListeners() {
@@ -121,6 +119,12 @@ export class CoordinateManager {
             const coordsDiv = document.createElement('div');
             coordsDiv.className = 'coords';
             coordsDiv.textContent = `${coord.x}, ${coord.y}`;
+            // 添加点击坐标显示特效的功能
+            coordsDiv.style.cursor = 'pointer';
+            coordsDiv.title = '点击在地图上显示位置';
+            coordsDiv.addEventListener('click', () => {
+                this.showCoordinateOnMap(coord.x, coord.y, coord.isPlayer);
+            });
             
             const nameDiv = document.createElement('div');
             nameDiv.className = 'name';
@@ -526,5 +530,139 @@ export class CoordinateManager {
                 toast.parentNode.removeChild(toast);
             }
         }, 2000);
+    }
+
+    // 在地图上显示坐标位置特效
+    showCoordinateOnMap(x, y, isPlayer = false) {
+        if (!this.app.image) {
+            this.showMobileToast('请先加载图片');
+            return;
+        }
+        
+        // 转换坐标到画布坐标
+        const canvasX = (x - 1) * this.app.zoom + this.app.offsetX;
+        const canvasY = (y - 1) * this.app.zoom + this.app.offsetY;
+        
+        // 检查坐标是否在可见区域内，如果不在则调整视图
+        const containerRect = this.app.canvasContainer.getBoundingClientRect();
+        const margin = 50; // 边距
+        
+        let needsAdjustment = false;
+        let newOffsetX = this.app.offsetX;
+        let newOffsetY = this.app.offsetY;
+        
+        if (canvasX < margin) {
+            newOffsetX = margin - (x - 1) * this.app.zoom;
+            needsAdjustment = true;
+        } else if (canvasX > containerRect.width - margin) {
+            newOffsetX = (containerRect.width - margin) - (x - 1) * this.app.zoom;
+            needsAdjustment = true;
+        }
+        
+        if (canvasY < margin) {
+            newOffsetY = margin - (y - 1) * this.app.zoom;
+            needsAdjustment = true;
+        } else if (canvasY > containerRect.height - margin) {
+            newOffsetY = (containerRect.height - margin) - (y - 1) * this.app.zoom;
+            needsAdjustment = true;
+        }
+        
+        // 如果需要调整视图，平滑移动到目标位置
+        if (needsAdjustment) {
+            this.animateToPosition(newOffsetX, newOffsetY, () => {
+                this.showLocationEffect(x, y, isPlayer);
+            });
+        } else {
+            this.showLocationEffect(x, y, isPlayer);
+        }
+    }
+    
+    // 平滑移动到指定位置
+    animateToPosition(targetX, targetY, callback) {
+        const startX = this.app.offsetX;
+        const startY = this.app.offsetY;
+        const duration = 500; // 动画持续时间
+        const startTime = Date.now();
+        
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // 使用缓动函数
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            
+            this.app.offsetX = startX + (targetX - startX) * easeProgress;
+            this.app.offsetY = startY + (targetY - startY) * easeProgress;
+            
+            this.app.imageRenderer.requestRender();
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                if (callback) callback();
+            }
+        };
+        
+        animate();
+    }
+    
+    // 显示位置特效
+    showLocationEffect(x, y, isPlayer = false) {
+        // 转换坐标到画布坐标
+        const canvasX = (x - 1) * this.app.zoom + this.app.offsetX;
+        const canvasY = (y - 1) * this.app.zoom + this.app.offsetY;
+        
+        // 使用ClickHandler的触摸反馈方法
+        if (this.app.clickHandler && this.app.clickHandler.addTouchFeedback) {
+            this.app.clickHandler.addTouchFeedback(canvasX, canvasY);
+        }
+        
+        // 绘制临时高亮标记
+        this.drawHighlightMarker(canvasX, canvasY, isPlayer);
+        
+        // 显示状态信息
+        const coordType = isPlayer ? 'Player' : 'Bot';
+        this.app.updateStatus(`已定位到 ${coordType} 坐标: (${x}, ${y})`);
+    }
+    
+    // 绘制高亮标记
+    drawHighlightMarker(canvasX, canvasY, isPlayer = false) {
+        const ctx = this.app.ctx;
+        ctx.save();
+        
+        // 根据是否是Player使用不同颜色
+        const color = isPlayer ? '#007cba' : '#28a745';
+        
+        // 绘制脉动效果
+        const pulseAnimation = (frame) => {
+            if (frame > 60) return; // 1秒动画（60fps）
+            
+            // 重新渲染图像以清除之前的标记
+            this.app.imageRenderer.renderImage();
+            
+            ctx.save();
+            ctx.globalAlpha = 1 - (frame / 60) * 0.5; // 透明度渐变
+            
+            // 绘制扩散圆圈
+            const radius = (frame / 60) * 30 + 10;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = Math.max(2, 4 - (frame / 60) * 2);
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, radius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // 绘制中心点
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.restore();
+            
+            requestAnimationFrame(() => pulseAnimation(frame + 1));
+        };
+        
+        pulseAnimation(0);
+        ctx.restore();
     }
 } 
