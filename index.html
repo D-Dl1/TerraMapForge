@@ -101,22 +101,26 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             padding: 15px;
             max-height: 80vh;
-            overflow-y: auto;
-            /* 优化移动端滚动 */
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            /* 移除面板自身的滚动，避免嵌套滚动问题 */
+            overflow: visible;
+            display: flex;
+            flex-direction: column;
         }
         
         .coordinates-panel h3 {
             margin: 0 0 15px 0;
             color: #333;
             font-size: 16px;
+            /* 固定标题，不参与滚动 */
+            flex-shrink: 0;
         }
         
         .export-controls {
             display: flex;
             gap: 8px;
             margin-bottom: 15px;
+            /* 固定导出按钮，不参与滚动 */
+            flex-shrink: 0;
         }
         
         .export-controls button {
@@ -126,7 +130,17 @@
             min-height: 36px;
         }
         
+        .coordinates-count {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            text-align: center;
+            /* 固定计数器，不参与滚动 */
+            flex-shrink: 0;
+        }
+        
         .coordinates-list {
+            /* 只有列表部分可滚动 */
             max-height: 60vh;
             overflow-y: auto;
             border: 1px solid #e0e0e0;
@@ -138,6 +152,9 @@
             overscroll-behavior: contain;
             /* 改善触摸区域 */
             touch-action: pan-y;
+            /* 确保列表可以伸缩 */
+            flex: 1;
+            min-height: 0;
         }
         
         .coordinate-item {
@@ -390,8 +407,7 @@
                 order: -1;
                 /* 增加移动端坐标面板高度 */
                 max-height: 60vh;
-                /* 优化滚动性能 */
-                will-change: scroll-position;
+                /* 移除多余的滚动性能设置，只在列表上使用 */
             }
             
             .coordinates-list {

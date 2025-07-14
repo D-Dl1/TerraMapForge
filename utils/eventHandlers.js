@@ -137,8 +137,9 @@ export class EventHandlers {
             const deltaX = e.clientX - this.dragStartX;
             const deltaY = e.clientY - this.dragStartY;
             
-            this.app.offsetX = this.dragStartOffsetX + deltaX;
-            this.app.offsetY = this.dragStartOffsetY + deltaY;
+            // 像素对齐偏移量，减少变形
+            this.app.offsetX = Math.round(this.dragStartOffsetX + deltaX);
+            this.app.offsetY = Math.round(this.dragStartOffsetY + deltaY);
             
             this.throttledRender();
         } else if (this.activePointers.size === 2) {
@@ -175,8 +176,9 @@ export class EventHandlers {
             this.app.zoom = Math.min(Math.max(newZoom, 0.1), 10);
             
             const zoomRatio = this.app.zoom / oldZoom;
-            this.app.offsetX = canvasCenterX - (canvasCenterX - this.app.offsetX) * zoomRatio;
-            this.app.offsetY = canvasCenterY - (canvasCenterY - this.app.offsetY) * zoomRatio;
+            // 像素对齐偏移量，减少变形
+            this.app.offsetX = Math.round(canvasCenterX - (canvasCenterX - this.app.offsetX) * zoomRatio);
+            this.app.offsetY = Math.round(canvasCenterY - (canvasCenterY - this.app.offsetY) * zoomRatio);
             
             this.throttledRender();
             this.app.updateZoomLevel();
@@ -234,8 +236,9 @@ export class EventHandlers {
             const deltaX = e.clientX - this.dragStartX;
             const deltaY = e.clientY - this.dragStartY;
             
-            this.app.offsetX = this.dragStartOffsetX + deltaX;
-            this.app.offsetY = this.dragStartOffsetY + deltaY;
+            // 像素对齐偏移量，减少变形
+            this.app.offsetX = Math.round(this.dragStartOffsetX + deltaX);
+            this.app.offsetY = Math.round(this.dragStartOffsetY + deltaY);
             
             this.throttledRender();
         } else {
@@ -278,8 +281,9 @@ export class EventHandlers {
         this.app.zoom = Math.min(Math.max(this.app.zoom * zoomFactor, 0.1), 10);
         
         const zoomRatio = this.app.zoom / oldZoom;
-        this.app.offsetX = mouseX - (mouseX - this.app.offsetX) * zoomRatio;
-        this.app.offsetY = mouseY - (mouseY - this.app.offsetY) * zoomRatio;
+        // 像素对齐偏移量，减少变形
+        this.app.offsetX = Math.round(mouseX - (mouseX - this.app.offsetX) * zoomRatio);
+        this.app.offsetY = Math.round(mouseY - (mouseY - this.app.offsetY) * zoomRatio);
         
         this.app.imageRenderer.requestRender();
         this.app.updateZoomLevel();
@@ -306,8 +310,9 @@ export class EventHandlers {
         this.app.zoom = Math.min(Math.max(newZoom, 0.1), 10);
         
         const zoomRatio = this.app.zoom / oldZoom;
-        this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.app.offsetX) * zoomRatio;
-        this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.app.offsetY) * zoomRatio;
+        // 像素对齐偏移量，减少变形
+        this.app.offsetX = Math.round(this.zoomCenterX - (this.zoomCenterX - this.app.offsetX) * zoomRatio);
+        this.app.offsetY = Math.round(this.zoomCenterY - (this.zoomCenterY - this.app.offsetY) * zoomRatio);
         
         this.throttledRender();
         this.app.updateZoomLevel();
@@ -367,8 +372,9 @@ export class EventHandlers {
             }
             
             if (this.isPanning) {
-                this.app.offsetX = this.panStartOffsetX + deltaX;
-                this.app.offsetY = this.panStartOffsetY + deltaY;
+                // 像素对齐偏移量，减少变形
+                this.app.offsetX = Math.round(this.panStartOffsetX + deltaX);
+                this.app.offsetY = Math.round(this.panStartOffsetY + deltaY);
                 
                 this.throttledRender();
             }
@@ -385,9 +391,9 @@ export class EventHandlers {
                 // 计算缩放比例（相对于开始缩放时的状态）
                 const zoomRatio = newZoom / this.touchStartZoom;
                 
-                // 使用缩放中心点来计算新的偏移量
-                this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.zoomStartOffsetX) * zoomRatio;
-                this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.zoomStartOffsetY) * zoomRatio;
+                // 使用缩放中心点来计算新的偏移量（像素对齐）
+                this.app.offsetX = Math.round(this.zoomCenterX - (this.zoomCenterX - this.zoomStartOffsetX) * zoomRatio);
+                this.app.offsetY = Math.round(this.zoomCenterY - (this.zoomCenterY - this.zoomStartOffsetY) * zoomRatio);
                 
                 this.app.zoom = newZoom;
                 

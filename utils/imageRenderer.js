@@ -100,28 +100,42 @@ export class ImageRenderer {
         // 限制偏移量范围
         this.limitOffset();
         
-        // 绘制图片（考虑偏移量）
-        this.app.ctx.imageSmoothingEnabled = false; // 保持像素清晰
+        // 保存渲染设置
+        this.app.ctx.save();
         
-        // 计算实际绘制区域，避免绘制看不见的部分
-        const drawX = Math.max(0, this.app.offsetX);
-        const drawY = Math.max(0, this.app.offsetY);
+        // 优化渲染设置，防止变形
+        this.app.ctx.imageSmoothingEnabled = false; // 保持像素清晰
+        this.app.ctx.webkitImageSmoothingEnabled = false;
+        this.app.ctx.mozImageSmoothingEnabled = false;
+        this.app.ctx.msImageSmoothingEnabled = false;
+        
+        // 像素对齐偏移量，防止模糊
+        const alignedOffsetX = Math.round(this.app.offsetX);
+        const alignedOffsetY = Math.round(this.app.offsetY);
+        
+        // 计算实际绘制区域
+        const drawX = Math.max(0, alignedOffsetX);
+        const drawY = Math.max(0, alignedOffsetY);
         const drawWidth = Math.min(scaledWidth, this.app.canvas.width - drawX);
         const drawHeight = Math.min(scaledHeight, this.app.canvas.height - drawY);
         
         // 计算源图像的对应区域
-        const srcX = Math.max(0, -this.app.offsetX / this.app.zoom);
-        const srcY = Math.max(0, -this.app.offsetY / this.app.zoom);
+        const srcX = Math.max(0, -alignedOffsetX / this.app.zoom);
+        const srcY = Math.max(0, -alignedOffsetY / this.app.zoom);
         const srcWidth = Math.min(this.app.originalWidth - srcX, drawWidth / this.app.zoom);
         const srcHeight = Math.min(this.app.originalHeight - srcY, drawHeight / this.app.zoom);
         
         if (srcWidth > 0 && srcHeight > 0) {
+            // 使用整数坐标绘制，避免亚像素渲染导致的模糊
             this.app.ctx.drawImage(
                 this.app.image,
-                srcX, srcY, srcWidth, srcHeight,
-                drawX, drawY, drawWidth, drawHeight
+                Math.round(srcX), Math.round(srcY), Math.round(srcWidth), Math.round(srcHeight),
+                Math.round(drawX), Math.round(drawY), Math.round(drawWidth), Math.round(drawHeight)
             );
         }
+        
+        // 恢复渲染设置
+        this.app.ctx.restore();
         
         // 延迟获取图像数据，避免每次都获取
         this.scheduleImageDataUpdate();
