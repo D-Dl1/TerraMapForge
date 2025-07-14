@@ -11,7 +11,6 @@ class PixelClickerApp {
         this.ctx = this.canvas.getContext('2d');
         this.image = null;
         this.zoom = 1;
-        this.imageData = null;
         this.originalWidth = 0;
         this.originalHeight = 0;
         
@@ -29,9 +28,6 @@ class PixelClickerApp {
         this.initializeElements();
         this.setupEventListeners();
         this.updateStatus('请选择并上传图片');
-        
-        // 页面卸载时清理资源
-        window.addEventListener('beforeunload', () => this.cleanup());
     }
     
     initializeElements() {
@@ -192,21 +188,9 @@ class PixelClickerApp {
     }
     
     updateStatus(message) {
-        this.statusDiv.textContent = `状态: ${message}`;
-        
-        // 移动端状态提示更明显
-        if (this.isMobile()) {
-            this.statusDiv.style.animation = 'none';
-            setTimeout(() => {
-                this.statusDiv.style.animation = 'touchFeedback 0.3s ease';
-            }, 10);
-        }
-    }
-    
-    // 清理资源
-    cleanup() {
-        if (this.imageRenderer) {
-            this.imageRenderer.cleanup();
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+            statusElement.textContent = message;
         }
     }
 }
