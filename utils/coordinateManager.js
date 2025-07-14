@@ -144,9 +144,24 @@ export class CoordinateManager {
             deleteBtn.className = 'delete-btn';
             deleteBtn.textContent = '×';
             deleteBtn.disabled = coord.isPlayer;
-            deleteBtn.addEventListener('click', () => {
-                this.removeCoordinate(coord.id);
-            });
+            
+            // 为Player坐标添加更好的提示
+            if (coord.isPlayer) {
+                deleteBtn.title = '无法删除玩家坐标';
+                deleteBtn.setAttribute('aria-label', '无法删除玩家坐标');
+                
+                // 移动端添加点击提示
+                deleteBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.showMobileToast('无法删除玩家坐标');
+                });
+            } else {
+                deleteBtn.title = '删除此标记点';
+                deleteBtn.setAttribute('aria-label', '删除此标记点');
+                deleteBtn.addEventListener('click', () => {
+                    this.removeCoordinate(coord.id);
+                });
+            }
             
             actionsDiv.appendChild(deleteBtn);
             
@@ -167,6 +182,9 @@ export class CoordinateManager {
         let touchStartY = 0;
         let touchMoveY = 0;
         let isDragging = false;
+        let dragThreshold = 15; // 增加拖拽阈值，避免误触
+        let touchStartTime = 0;
+        let initialScrollTop = 0;
         
         // 桌面端拖拽
         item.addEventListener('dragstart', (e) => {
@@ -194,34 +212,85 @@ export class CoordinateManager {
             this.handleDrop(item);
         });
         
-        // 移动端触摸事件
+        // 移动端触摸事件 - 仅在拖拽手柄上启用
+        const dragHandle = item.querySelector('.drag-handle');
+        if (dragHandle) {
+            dragHandle.addEventListener('touchstart', (e) => {
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                isDragging = false;
+                
+                // 记录容器的初始滚动位置
+                const scrollContainer = this.coordinatesList;
+                initialScrollTop = scrollContainer.scrollTop;
+                
+                // 防止页面滚动，但允许容器滚动
+                e.stopPropagation();
+            }, { passive: true });
+            
+            dragHandle.addEventListener('touchmove', (e) => {
+                const touchTime = Date.now() - touchStartTime;
+                touchMoveY = e.touches[0].clientY;
+                const deltaY = Math.abs(touchMoveY - touchStartY);
+                
+                // 只有在拖拽手柄上且移动距离足够时才启动拖拽
+                if (deltaY > dragThreshold && touchTime > 150 && !isDragging) {
+                    isDragging = true;
+                    draggedElement = item;
+                    item.classList.add('dragging');
+                    placeholder = this.createPlaceholder();
+                    
+                    // 防止滚动
+                    document.body.style.overflow = 'hidden';
+                    this.coordinatesList.style.overflow = 'hidden';
+                    
+                    // 提供触觉反馈
+                    if (navigator.vibrate) {
+                        navigator.vibrate(50);
+                    }
+                }
+                
+                if (isDragging) {
+                    e.preventDefault();
+                    this.handleTouchMove(e);
+                }
+            }, { passive: false });
+            
+            dragHandle.addEventListener('touchend', (e) => {
+                if (isDragging) {
+                    this.handleTouchEnd(e);
+                }
+                this.cleanupDrag();
+                
+                // 恢复滚动
+                document.body.style.overflow = '';
+                this.coordinatesList.style.overflow = 'auto';
+            }, { passive: true });
+            
+            // 避免点击事件冲突
+            dragHandle.addEventListener('touchcancel', (e) => {
+                this.cleanupDrag();
+                document.body.style.overflow = '';
+                this.coordinatesList.style.overflow = 'auto';
+            }, { passive: true });
+        }
+        
+        // 为整个item添加通用触摸事件（用于非拖拽手柄区域）
         item.addEventListener('touchstart', (e) => {
-            touchStartY = e.touches[0].clientY;
-            isDragging = false;
-        });
+            // 如果不是拖拽手柄，允许正常滚动
+            if (!e.target.classList.contains('drag-handle')) {
+                touchStartY = e.touches[0].clientY;
+                isDragging = false;
+            }
+        }, { passive: true });
         
         item.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            touchMoveY = e.touches[0].clientY;
-            
-            if (Math.abs(touchMoveY - touchStartY) > 10 && !isDragging) {
-                isDragging = true;
-                draggedElement = item;
-                item.classList.add('dragging');
-                placeholder = this.createPlaceholder();
+            // 只有在非拖拽手柄区域才允许滚动
+            if (!isDragging && !e.target.classList.contains('drag-handle')) {
+                // 允许正常滚动
+                return;
             }
-            
-            if (isDragging) {
-                this.handleTouchMove(e);
-            }
-        });
-        
-        item.addEventListener('touchend', (e) => {
-            if (isDragging) {
-                this.handleTouchEnd(e);
-            }
-            this.cleanupDrag();
-        });
+        }, { passive: true });
     }
     
     createPlaceholder() {
@@ -295,13 +364,28 @@ export class CoordinateManager {
     }
     
     cleanupDrag() {
+        const draggedElement = document.querySelector('.coordinate-item.dragging');
+        const placeholder = document.querySelector('.coordinate-item[style*="opacity: 0.5"]');
+        
         if (draggedElement) {
             draggedElement.classList.remove('dragging');
-            draggedElement = null;
         }
+        
         if (placeholder && placeholder.parentNode) {
             placeholder.parentNode.removeChild(placeholder);
         }
+        
+        // 恢复滚动状态
+        document.body.style.overflow = '';
+        if (this.coordinatesList) {
+            this.coordinatesList.style.overflow = 'auto';
+        }
+        
+        // 清除任何可能的触摸状态
+        document.querySelectorAll('.coordinate-item').forEach(item => {
+            item.style.transform = '';
+            item.style.zIndex = '';
+        });
     }
     
     updateCount() {
@@ -393,5 +477,54 @@ export class CoordinateManager {
         this.coordinates = this.coordinates.filter(coord => coord.isPlayer);
         this.renderCoordinatesList();
         this.updateCount();
+    }
+    
+    // 移动端Toast提示
+    showMobileToast(message) {
+        // 检查是否在移动端
+        if (!this.app.isMobile()) return;
+        
+        // 创建toast元素
+        const toast = document.createElement('div');
+        toast.className = 'mobile-toast';
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 10000;
+            animation: fadeInOut 2s ease-in-out;
+            pointer-events: none;
+        `;
+        
+        // 添加CSS动画
+        if (!document.querySelector('#toast-style')) {
+            const style = document.createElement('style');
+            style.id = 'toast-style';
+            style.textContent = `
+                @keyframes fadeInOut {
+                    0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+                    20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(toast);
+        
+        // 2秒后移除
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 2000);
     }
 } 

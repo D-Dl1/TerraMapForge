@@ -102,6 +102,9 @@
             padding: 15px;
             max-height: 80vh;
             overflow-y: auto;
+            /* 优化移动端滚动 */
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
         
         .coordinates-panel h3 {
@@ -130,6 +133,11 @@
             border-radius: 4px;
             padding: 8px;
             background: #fafafa;
+            /* 优化移动端滚动 */
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            /* 改善触摸区域 */
+            touch-action: pan-y;
         }
         
         .coordinate-item {
@@ -142,6 +150,9 @@
             margin-bottom: 4px;
             cursor: move;
             transition: all 0.2s ease;
+            /* 改善移动端触摸 */
+            min-height: 44px;
+            touch-action: manipulation;
         }
         
         .coordinate-item:hover {
@@ -157,6 +168,9 @@
             cursor: move;
             color: #999;
             font-size: 12px;
+            /* 移动端增大触摸区域 */
+            padding: 8px 4px;
+            touch-action: none;
         }
         
         .coordinate-item .info {
@@ -189,6 +203,7 @@
             -moz-user-select: text;
             -ms-user-select: text;
             user-select: text;
+            touch-action: manipulation;
         }
         
         .coordinate-item .actions {
@@ -201,16 +216,19 @@
             font-size: 10px;
             min-height: 24px;
             min-width: 24px;
+            touch-action: manipulation;
         }
         
         .coordinate-item .delete-btn {
             background: #dc3545;
+            position: relative;
         }
         
         .coordinate-item .delete-btn:hover {
             background: #c82333;
         }
         
+        /* Player坐标样式和提示 */
         .coordinate-item.player {
             background: #e8f4f8;
             border-left: 4px solid #007cba;
@@ -220,6 +238,30 @@
             opacity: 0.5;
             cursor: not-allowed;
             background: #ccc;
+        }
+        
+        .coordinate-item.player .delete-btn::after {
+            content: "无法删除玩家坐标";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .coordinate-item.player .delete-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
         }
         
         .coordinates-count {
@@ -335,6 +377,8 @@
         @media (max-width: 768px) {
             body {
                 padding: 5px;
+                /* 防止横向滚动 */
+                overflow-x: hidden;
             }
             
             .container {
@@ -344,7 +388,17 @@
             
             .coordinates-panel {
                 order: -1;
-                max-height: 40vh;
+                /* 增加移动端坐标面板高度 */
+                max-height: 60vh;
+                /* 优化滚动性能 */
+                will-change: scroll-position;
+            }
+            
+            .coordinates-list {
+                /* 移动端增加坐标列表高度 */
+                max-height: 45vh;
+                /* 确保在小屏幕上有足够空间 */
+                min-height: 200px;
             }
             
             .controls {
@@ -353,6 +407,9 @@
             
             .zoom-controls {
                 justify-content: center;
+                /* 防止按钮换行导致的触摸问题 */
+                flex-wrap: nowrap;
+                overflow-x: auto;
             }
             
             button {
@@ -360,10 +417,59 @@
                 font-size: 16px;
                 min-height: 48px;
                 min-width: 48px;
+                /* 改善触摸反馈 */
+                touch-action: manipulation;
             }
             
             .canvas-container {
                 max-height: 50vh;
+                /* 优化Canvas触摸交互 */
+                touch-action: pan-x pan-y pinch-zoom;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            /* 移动端坐标项优化 */
+            .coordinate-item {
+                min-height: 52px;
+                padding: 12px 8px;
+                /* 增大触摸区域 */
+                margin-bottom: 8px;
+            }
+            
+            .coordinate-item .drag-handle {
+                font-size: 16px;
+                padding: 12px 8px;
+                /* 改善移动端拖拽体验 */
+                cursor: grab;
+            }
+            
+            .coordinate-item .name input {
+                width: 100px;
+                min-height: 32px;
+                font-size: 14px;
+                padding: 6px 8px;
+            }
+            
+            .coordinate-item .actions button {
+                min-height: 36px;
+                min-width: 36px;
+                font-size: 14px;
+                padding: 8px;
+            }
+            
+            /* 移动端删除按钮提示优化 */
+            .coordinate-item.player .delete-btn::after {
+                /* 移动端使用点击显示提示而不是hover */
+                content: "🔒";
+                position: static;
+                opacity: 1;
+                visibility: visible;
+                background: transparent;
+                color: #666;
+                padding: 0;
+                font-size: 16px;
+                transform: none;
             }
             
             .desktop-tips {
@@ -388,6 +494,41 @@
             
             #canvas {
                 cursor: default;
+                /* 确保canvas不会超出容器 */
+                max-width: 100%;
+                height: auto;
+            }
+        }
+        
+        /* 横屏移动端特殊处理 */
+        @media (max-width: 768px) and (orientation: landscape) {
+            body {
+                /* 横屏时减少padding以节省空间 */
+                padding: 2px;
+            }
+            
+            .coordinates-panel {
+                /* 横屏时减少坐标面板高度，为canvas留更多空间 */
+                max-height: 35vh;
+            }
+            
+            .coordinates-list {
+                max-height: 25vh;
+                min-height: 150px;
+            }
+            
+            .canvas-container {
+                /* 横屏时增加canvas高度 */
+                max-height: 60vh;
+            }
+            
+            .info {
+                font-size: 14px;
+            }
+            
+            .mobile-tips {
+                /* 横屏时隐藏详细提示以节省空间 */
+                display: none;
             }
         }
         
