@@ -382,20 +382,30 @@ export class EventHandlers {
             const currentDistance = this.getTouchDistance(e.touches);
             
             if (this.lastTouchDistance > 0 && currentDistance > 0) {
-                // 计算缩放比例（相对于初始距离）
-                const scale = currentDistance / this.lastTouchDistance;
+                // 计算当前缩放比例（相对于上一帧）
+                const frameScale = currentDistance / this.lastTouchDistance;
                 
-                // 计算新的缩放值（基于touchStartZoom）
-                const newZoom = Math.min(Math.max(this.touchStartZoom * scale, 0.1), 10);
+                // 平滑缩放，避免突变
+                const smoothScale = 1 + (frameScale - 1) * 0.8;
                 
-                // 计算缩放比例（相对于开始缩放时的状态）
-                const zoomRatio = newZoom / this.touchStartZoom;
+                // 计算新的缩放值
+                const newZoom = Math.min(Math.max(this.app.zoom * smoothScale, 0.1), 10);
                 
-                // 使用缩放中心点来计算新的偏移量（像素对齐）
-                this.app.offsetX = Math.round(this.zoomCenterX - (this.zoomCenterX - this.zoomStartOffsetX) * zoomRatio);
-                this.app.offsetY = Math.round(this.zoomCenterY - (this.zoomCenterY - this.zoomStartOffsetY) * zoomRatio);
+                // 计算缩放比例
+                const zoomRatio = newZoom / this.app.zoom;
+                
+                // 使用当前缩放中心点来计算新的偏移量（像素对齐）
+                const rect = this.app.canvas.getBoundingClientRect();
+                const currentCenterX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+                const currentCenterY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+                
+                this.app.offsetX = Math.round(currentCenterX - (currentCenterX - this.app.offsetX) * zoomRatio);
+                this.app.offsetY = Math.round(currentCenterY - (currentCenterY - this.app.offsetY) * zoomRatio);
                 
                 this.app.zoom = newZoom;
+                
+                // 更新距离为当前距离
+                this.lastTouchDistance = currentDistance;
                 
                 this.throttledRender();
                 this.app.updateZoomLevel();

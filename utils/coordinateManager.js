@@ -3,8 +3,15 @@ export class CoordinateManager {
     constructor(app) {
         this.app = app;
         this.coordinates = [];
-        this.nextBotId = 1;
-        this.maxCoordinates = 512;
+        this.nextId = 1;
+        
+        // 拖拽相关变量
+        this.draggedItem = null;
+        this.isDragging = false;
+        this.placeholder = null;
+        this.currentAnimation = null;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
         
         this.coordinatesList = document.getElementById('coordinatesList');
         this.coordinatesCount = document.getElementById('coordinatesCount');
@@ -179,122 +186,124 @@ export class CoordinateManager {
     }
     
     setupDragEvents(item) {
-        let draggedElement = null;
-        let placeholder = null;
+        // 只为拖拽手柄添加拖拽事件，而不是整个item
+        const dragHandle = item.querySelector('.drag-handle');
         
-        // 支持移动端拖拽
-        let touchStartY = 0;
-        let touchMoveY = 0;
-        let isDragging = false;
-        let dragThreshold = 15; // 增加拖拽阈值，避免误触
-        let touchStartTime = 0;
-        let initialScrollTop = 0;
-        
-        // 桌面端拖拽
-        item.addEventListener('dragstart', (e) => {
-            draggedElement = item;
+        // 桌面端拖拽事件（只在拖拽手柄上）
+        dragHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.draggedItem = item;
+            this.isDragging = false;
+            this.dragStartX = e.clientX;
+            this.dragStartY = e.clientY;
+            
             item.classList.add('dragging');
             
             // 创建占位符
-            placeholder = this.createPlaceholder();
+            this.placeholder = this.createPlaceholder();
             
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', item.outerHTML);
+            const handleMouseMove = (e) => {
+                const deltaX = Math.abs(e.clientX - this.dragStartX);
+                const deltaY = Math.abs(e.clientY - this.dragStartY);
+                
+                if (!this.isDragging && (deltaX > 5 || deltaY > 5)) {
+                    this.isDragging = true;
+                }
+                
+                if (this.isDragging) {
+                    // 在拖拽过程中处理悬停效果
+                    const elementBelow = document.elementFromPoint(e.clientX, e.clientY);
+                    const targetItem = elementBelow?.closest('.coordinate-item');
+                    
+                    if (targetItem && targetItem !== this.draggedItem) {
+                        this.handleDragOver(e, targetItem);
+                    }
+                }
+            };
+            
+            const handleMouseUp = () => {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                
+                if (this.isDragging) {
+                    this.handleDrop(item);
+                }
+                
+                this.cleanupDrag();
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
         });
         
-        item.addEventListener('dragend', (e) => {
-            this.cleanupDrag();
-        });
+        // 移动端触摸事件（只在拖拽手柄上）
+        let isDragging = false;
+        let touchStartX, touchStartY;
         
-        item.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            this.handleDragOver(e, item);
-        });
-        
-        item.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.handleDrop(item);
-        });
-        
-        // 移动端触摸事件 - 仅在拖拽手柄上启用
-        const dragHandle = item.querySelector('.drag-handle');
-        if (dragHandle) {
-            dragHandle.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-                touchStartTime = Date.now();
+        dragHandle.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
                 isDragging = false;
                 
-                // 记录容器的初始滚动位置
-                const scrollContainer = this.coordinatesList;
-                initialScrollTop = scrollContainer.scrollTop;
+                this.draggedItem = item;
+                item.classList.add('dragging');
+                this.placeholder = this.createPlaceholder();
                 
-                // 防止页面滚动，但允许容器滚动
-                e.stopPropagation();
-            }, { passive: true });
+                // 防止滚动
+                document.body.style.overflow = 'hidden';
+                this.coordinatesList.style.overflow = 'hidden';
+                
+                // 提供触觉反馈
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+            }
             
-            dragHandle.addEventListener('touchmove', (e) => {
-                const touchTime = Date.now() - touchStartTime;
-                touchMoveY = e.touches[0].clientY;
-                const deltaY = Math.abs(touchMoveY - touchStartY);
+            if (isDragging) {
+                e.preventDefault();
+                this.handleTouchMove(e);
+            }
+        }, { passive: false });
+        
+        dragHandle.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const deltaX = Math.abs(touch.clientX - touchStartX);
+                const deltaY = Math.abs(touch.clientY - touchStartY);
                 
-                // 只有在拖拽手柄上且移动距离足够时才启动拖拽
-                if (deltaY > dragThreshold && touchTime > 150 && !isDragging) {
+                if (!isDragging && (deltaX > 10 || deltaY > 10)) {
                     isDragging = true;
-                    draggedElement = item;
-                    item.classList.add('dragging');
-                    placeholder = this.createPlaceholder();
-                    
-                    // 防止滚动
-                    document.body.style.overflow = 'hidden';
-                    this.coordinatesList.style.overflow = 'hidden';
-                    
-                    // 提供触觉反馈
-                    if (navigator.vibrate) {
-                        navigator.vibrate(50);
-                    }
+                    e.preventDefault();
                 }
                 
                 if (isDragging) {
                     e.preventDefault();
                     this.handleTouchMove(e);
                 }
-            }, { passive: false });
-            
-            dragHandle.addEventListener('touchend', (e) => {
-                if (isDragging) {
-                    this.handleTouchEnd(e);
-                }
-                this.cleanupDrag();
-                
-                // 恢复滚动
-                document.body.style.overflow = '';
-                this.coordinatesList.style.overflow = 'auto';
-            }, { passive: true });
-            
-            // 避免点击事件冲突
-            dragHandle.addEventListener('touchcancel', (e) => {
-                this.cleanupDrag();
-                document.body.style.overflow = '';
-                this.coordinatesList.style.overflow = 'auto';
-            }, { passive: true });
-        }
-        
-        // 为整个item添加通用触摸事件（用于非拖拽手柄区域）
-        item.addEventListener('touchstart', (e) => {
-            // 如果不是拖拽手柄，允许正常滚动
-            if (!e.target.classList.contains('drag-handle')) {
-                touchStartY = e.touches[0].clientY;
-                isDragging = false;
             }
+        }, { passive: false });
+        
+        dragHandle.addEventListener('touchend', (e) => {
+            if (isDragging) {
+                this.handleTouchEnd(e);
+            }
+            this.cleanupDrag();
+            
+            // 恢复滚动
+            document.body.style.overflow = '';
+            this.coordinatesList.style.overflow = 'auto';
         }, { passive: true });
         
-        item.addEventListener('touchmove', (e) => {
-            // 只有在非拖拽手柄区域才允许滚动
-            if (!isDragging && !e.target.classList.contains('drag-handle')) {
-                // 允许正常滚动
-                return;
-            }
+        // 避免点击事件冲突
+        dragHandle.addEventListener('touchcancel', (e) => {
+            this.cleanupDrag();
+            document.body.style.overflow = '';
+            this.coordinatesList.style.overflow = 'auto';
         }, { passive: true });
+        
+        // 移除item上的通用触摸事件，避免冲突
     }
     
     createPlaceholder() {
@@ -307,20 +316,20 @@ export class CoordinateManager {
     }
     
     handleDragOver(e, item) {
-        if (draggedElement && draggedElement !== item) {
+        if (this.draggedItem && this.draggedItem !== item) {
             const rect = item.getBoundingClientRect();
             const middle = rect.top + rect.height / 2;
             
             if (e.clientY < middle) {
-                item.parentNode.insertBefore(placeholder, item);
+                item.parentNode.insertBefore(this.placeholder, item);
             } else {
-                item.parentNode.insertBefore(placeholder, item.nextSibling);
+                item.parentNode.insertBefore(this.placeholder, item.nextSibling);
             }
         }
     }
     
     handleDrop(item) {
-        if (draggedElement && draggedElement !== item) {
+        if (this.draggedItem && this.draggedItem !== item) {
             this.performMove(item);
         }
     }
@@ -328,16 +337,16 @@ export class CoordinateManager {
     handleTouchMove(e) {
         const touch = e.touches[0];
         const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
-        const targetItem = elements.find(el => el.classList.contains('coordinate-item') && el !== draggedElement);
+        const targetItem = elements.find(el => el.classList.contains('coordinate-item') && el !== this.draggedItem);
         
         if (targetItem) {
             const rect = targetItem.getBoundingClientRect();
             const middle = rect.top + rect.height / 2;
             
             if (touch.clientY < middle) {
-                targetItem.parentNode.insertBefore(placeholder, targetItem);
+                targetItem.parentNode.insertBefore(this.placeholder, targetItem);
             } else {
-                targetItem.parentNode.insertBefore(placeholder, targetItem.nextSibling);
+                targetItem.parentNode.insertBefore(this.placeholder, targetItem.nextSibling);
             }
         }
     }
@@ -345,7 +354,7 @@ export class CoordinateManager {
     handleTouchEnd(e) {
         const touch = e.changedTouches[0];
         const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
-        const targetItem = elements.find(el => el.classList.contains('coordinate-item') && el !== draggedElement);
+        const targetItem = elements.find(el => el.classList.contains('coordinate-item') && el !== this.draggedItem);
         
         if (targetItem) {
             this.performMove(targetItem);
@@ -353,14 +362,14 @@ export class CoordinateManager {
     }
     
     performMove(targetItem) {
-        const fromIndex = parseInt(draggedElement.dataset.index);
+        const fromIndex = parseInt(this.draggedItem.dataset.index);
         const toIndex = parseInt(targetItem.dataset.index);
         
         // 计算实际的目标位置
         let actualToIndex = toIndex;
-        if (placeholder.nextSibling === targetItem) {
+        if (this.placeholder.nextSibling === targetItem) {
             actualToIndex = toIndex;
-        } else if (placeholder.previousSibling === targetItem) {
+        } else if (this.placeholder.previousSibling === targetItem) {
             actualToIndex = toIndex + 1;
         }
         
@@ -368,28 +377,16 @@ export class CoordinateManager {
     }
     
     cleanupDrag() {
-        const draggedElement = document.querySelector('.coordinate-item.dragging');
-        const placeholder = document.querySelector('.coordinate-item[style*="opacity: 0.5"]');
-        
-        if (draggedElement) {
-            draggedElement.classList.remove('dragging');
+        if (this.draggedItem) {
+            this.draggedItem.classList.remove('dragging');
+            this.draggedItem = null;
         }
         
-        if (placeholder && placeholder.parentNode) {
-            placeholder.parentNode.removeChild(placeholder);
+        if (this.placeholder && this.placeholder.parentNode) {
+            this.placeholder.parentNode.removeChild(this.placeholder);
         }
-        
-        // 恢复滚动状态
-        document.body.style.overflow = '';
-        if (this.coordinatesList) {
-            this.coordinatesList.style.overflow = 'auto';
-        }
-        
-        // 清除任何可能的触摸状态
-        document.querySelectorAll('.coordinate-item').forEach(item => {
-            item.style.transform = '';
-            item.style.zIndex = '';
-        });
+        this.placeholder = null;
+        this.isDragging = false;
     }
     
     updateCount() {
@@ -535,7 +532,11 @@ export class CoordinateManager {
     // 在地图上显示坐标位置特效
     showCoordinateOnMap(x, y, isPlayer = false) {
         if (!this.app.image) {
-            this.showMobileToast('请先加载图片');
+            if (this.app.isMobile()) {
+                this.showMobileToast('请先加载图片');
+            } else {
+                this.app.updateStatus('请先加载图片');
+            }
             return;
         }
         
@@ -575,6 +576,11 @@ export class CoordinateManager {
         } else {
             this.showLocationEffect(x, y, isPlayer);
         }
+        
+        // 提供用户反馈
+        if (this.app.isMobile()) {
+            this.showMobileToast(`已定位到 ${isPlayer ? 'Player' : 'Bot'} 坐标: (${x}, ${y})`);
+        }
     }
     
     // 平滑移动到指定位置
@@ -591,8 +597,8 @@ export class CoordinateManager {
             // 使用缓动函数
             const easeProgress = 1 - Math.pow(1 - progress, 3);
             
-            this.app.offsetX = startX + (targetX - startX) * easeProgress;
-            this.app.offsetY = startY + (targetY - startY) * easeProgress;
+            this.app.offsetX = Math.round(startX + (targetX - startX) * easeProgress);
+            this.app.offsetY = Math.round(startY + (targetY - startY) * easeProgress);
             
             this.app.imageRenderer.requestRender();
             
@@ -612,11 +618,6 @@ export class CoordinateManager {
         const canvasX = (x - 1) * this.app.zoom + this.app.offsetX;
         const canvasY = (y - 1) * this.app.zoom + this.app.offsetY;
         
-        // 使用ClickHandler的触摸反馈方法
-        if (this.app.clickHandler && this.app.clickHandler.addTouchFeedback) {
-            this.app.clickHandler.addTouchFeedback(canvasX, canvasY);
-        }
-        
         // 绘制临时高亮标记
         this.drawHighlightMarker(canvasX, canvasY, isPlayer);
         
@@ -628,41 +629,48 @@ export class CoordinateManager {
     // 绘制高亮标记
     drawHighlightMarker(canvasX, canvasY, isPlayer = false) {
         const ctx = this.app.ctx;
-        ctx.save();
         
         // 根据是否是Player使用不同颜色
         const color = isPlayer ? '#007cba' : '#28a745';
         
+        // 清除之前可能存在的动画
+        if (this.currentAnimation) {
+            cancelAnimationFrame(this.currentAnimation);
+        }
+        
         // 绘制脉动效果
         const pulseAnimation = (frame) => {
-            if (frame > 60) return; // 1秒动画（60fps）
+            if (frame > 60) { // 1秒动画（60fps）
+                this.currentAnimation = null;
+                return;
+            }
             
             // 重新渲染图像以清除之前的标记
             this.app.imageRenderer.renderImage();
             
             ctx.save();
-            ctx.globalAlpha = 1 - (frame / 60) * 0.5; // 透明度渐变
+            ctx.globalAlpha = Math.max(0.1, 1 - (frame / 60) * 0.7); // 透明度渐变
             
             // 绘制扩散圆圈
-            const radius = (frame / 60) * 30 + 10;
+            const radius = (frame / 60) * 25 + 8;
             ctx.strokeStyle = color;
-            ctx.lineWidth = Math.max(2, 4 - (frame / 60) * 2);
+            ctx.lineWidth = Math.max(1, 3 - (frame / 60) * 2);
             ctx.beginPath();
             ctx.arc(canvasX, canvasY, radius, 0, 2 * Math.PI);
             ctx.stroke();
             
             // 绘制中心点
             ctx.fillStyle = color;
+            ctx.globalAlpha = Math.max(0.3, 1 - (frame / 60) * 0.5);
             ctx.beginPath();
-            ctx.arc(canvasX, canvasY, 6, 0, 2 * Math.PI);
+            ctx.arc(canvasX, canvasY, 5, 0, 2 * Math.PI);
             ctx.fill();
             
             ctx.restore();
             
-            requestAnimationFrame(() => pulseAnimation(frame + 1));
+            this.currentAnimation = requestAnimationFrame(() => pulseAnimation(frame + 1));
         };
         
         pulseAnimation(0);
-        ctx.restore();
     }
 } 

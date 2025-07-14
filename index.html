@@ -74,8 +74,9 @@
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             overflow: hidden;
-            /* 固定长宽为正方形，基于当前宽度 */
+            /* 限制电脑端最大宽度，避免画布过大 */
             width: 100%;
+            max-width: 600px; /* 限制最大宽度 */
             height: 0;
             padding-bottom: 100%; /* 创建正方形 */
             position: relative;
@@ -166,37 +167,46 @@
             min-height: 0;
         }
         
+        /* 修复拖拽问题：只允许拖拽手柄进行拖拽 */
         .coordinate-item {
             display: flex;
             align-items: center;
             gap: 8px;
             padding: 8px;
-            background: white;
-            border-radius: 4px;
+            background: #f9f9f9;
+            border-radius: 6px;
             margin-bottom: 4px;
-            cursor: move;
             transition: all 0.2s ease;
-            /* 改善移动端触摸 */
             min-height: 44px;
-            touch-action: manipulation;
+            border: 2px solid transparent;
+            /* 禁用整个item的拖拽，只允许拖拽手柄 */
+            user-select: none;
         }
         
-        .coordinate-item:hover {
-            background: #f5f5f5;
+        .coordinate-item.player {
+            background: #e8f4f8;
+            border-color: #007cba;
         }
         
         .coordinate-item.dragging {
             opacity: 0.5;
-            transform: scale(0.95);
+            transform: scale(1.02);
         }
         
         .coordinate-item .drag-handle {
-            cursor: move;
-            color: #999;
-            font-size: 12px;
-            /* 移动端增大触摸区域 */
+            font-size: 14px;
+            color: #666;
+            cursor: grab;
             padding: 8px 4px;
-            touch-action: none;
+            user-select: none;
+            /* 只有拖拽手柄可以被拖拽 */
+            touch-action: manipulation;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .coordinate-item .drag-handle:active {
+            cursor: grabbing;
         }
         
         .coordinate-item .info {
@@ -447,8 +457,9 @@
             }
             
             .canvas-container {
-                /* 移动端保持正方形但调整大小 */
+                /* 移动端去掉最大宽度限制，保持正方形 */
                 width: 100%;
+                max-width: none;
                 height: 0;
                 padding-bottom: 100%;
                 /* 优化Canvas触摸交互 */
