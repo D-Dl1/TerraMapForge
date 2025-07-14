@@ -16,8 +16,10 @@ export class CoordinateManager {
     }
     
     initializeDefault() {
-        // 默认添加Player坐标点
-        this.addCoordinate(0, 0, 'Player', true);
+        // 只在移动端默认添加Player坐标点
+        if (this.app.isMobile()) {
+            this.addCoordinate(0, 0, 'Player', true);
+        }
     }
     
     setupEventListeners() {

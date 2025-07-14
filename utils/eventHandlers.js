@@ -22,6 +22,8 @@ export class EventHandlers {
         this.touchStartZoom = 1;
         this.zoomCenterX = 0;
         this.zoomCenterY = 0;
+        this.zoomStartOffsetX = 0;
+        this.zoomStartOffsetY = 0;
         
         // 性能优化
         this.lastMoveTime = 0;
@@ -334,12 +336,18 @@ export class EventHandlers {
             this.panStartOffsetY = this.app.offsetY;
             this.isPanning = false;
         } else if (e.touches.length === 2) {
+            // 记录初始双指距离和缩放参数
             this.lastTouchDistance = this.getTouchDistance(e.touches);
             this.touchStartZoom = this.app.zoom;
             
+            // 计算缩放中心点（相对于canvas）
             const rect = this.app.canvas.getBoundingClientRect();
             this.zoomCenterX = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
             this.zoomCenterY = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+            
+            // 记录缩放开始时的偏移量
+            this.zoomStartOffsetX = this.app.offsetX;
+            this.zoomStartOffsetY = this.app.offsetY;
             
             this.isPanning = false;
         }
@@ -359,26 +367,29 @@ export class EventHandlers {
             }
             
             if (this.isPanning) {
-                const newOffsetX = this.panStartOffsetX + deltaX;
-                const newOffsetY = this.panStartOffsetY + deltaY;
-                
-                this.app.offsetX = newOffsetX;
-                this.app.offsetY = newOffsetY;
+                this.app.offsetX = this.panStartOffsetX + deltaX;
+                this.app.offsetY = this.panStartOffsetY + deltaY;
                 
                 this.throttledRender();
             }
         } else if (e.touches.length === 2) {
             const currentDistance = this.getTouchDistance(e.touches);
-            if (this.lastTouchDistance > 0) {
+            
+            if (this.lastTouchDistance > 0 && currentDistance > 0) {
+                // 计算缩放比例（相对于初始距离）
                 const scale = currentDistance / this.lastTouchDistance;
-                const newZoom = this.touchStartZoom * scale;
                 
-                const oldZoom = this.app.zoom;
-                this.app.zoom = Math.min(Math.max(newZoom, 0.1), 10);
+                // 计算新的缩放值（基于touchStartZoom）
+                const newZoom = Math.min(Math.max(this.touchStartZoom * scale, 0.1), 10);
                 
-                const zoomRatio = this.app.zoom / oldZoom;
-                this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.app.offsetX) * zoomRatio;
-                this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.app.offsetY) * zoomRatio;
+                // 计算缩放比例（相对于开始缩放时的状态）
+                const zoomRatio = newZoom / this.touchStartZoom;
+                
+                // 使用缩放中心点来计算新的偏移量
+                this.app.offsetX = this.zoomCenterX - (this.zoomCenterX - this.zoomStartOffsetX) * zoomRatio;
+                this.app.offsetY = this.zoomCenterY - (this.zoomCenterY - this.zoomStartOffsetY) * zoomRatio;
+                
+                this.app.zoom = newZoom;
                 
                 this.throttledRender();
                 this.app.updateZoomLevel();
