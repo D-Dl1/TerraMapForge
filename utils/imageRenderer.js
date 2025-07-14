@@ -77,6 +77,9 @@ export class ImageRenderer {
         const containerWidth = containerRect.width;
         const containerHeight = containerRect.height;
         
+        // 获取设备像素比例
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        
         // 智能设置canvas尺寸，避免过大
         const canvasWidth = Math.min(
             Math.max(containerWidth, Math.min(scaledWidth, this.maxCanvasSize)),
@@ -89,13 +92,22 @@ export class ImageRenderer {
         
         // 只在尺寸变化时重新设置canvas
         if (this.app.canvas.width !== canvasWidth || this.app.canvas.height !== canvasHeight) {
-            this.app.canvas.width = canvasWidth;
-            this.app.canvas.height = canvasHeight;
+            // 设置显示尺寸
+            this.app.canvas.style.width = canvasWidth + 'px';
+            this.app.canvas.style.height = canvasHeight + 'px';
+            
+            // 设置实际分辨率（高DPI支持）
+            this.app.canvas.width = Math.round(canvasWidth * devicePixelRatio);
+            this.app.canvas.height = Math.round(canvasHeight * devicePixelRatio);
+            
+            // 缩放绘图上下文以匹配设备像素比例
+            this.app.ctx.scale(devicePixelRatio, devicePixelRatio);
+            
             this.cachedImageData = null; // 清除缓存
         }
         
         // 清空画布
-        this.app.ctx.clearRect(0, 0, this.app.canvas.width, this.app.canvas.height);
+        this.app.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         
         // 限制偏移量范围
         this.limitOffset();
@@ -113,24 +125,32 @@ export class ImageRenderer {
         const alignedOffsetX = Math.round(this.app.offsetX);
         const alignedOffsetY = Math.round(this.app.offsetY);
         
-        // 计算实际绘制区域
+        // 计算缩放后的图像尺寸（整数值）
+        const scaledWidthInt = Math.round(scaledWidth);
+        const scaledHeightInt = Math.round(scaledHeight);
+        
+        // 计算实际绘制区域（整数值）
         const drawX = Math.max(0, alignedOffsetX);
         const drawY = Math.max(0, alignedOffsetY);
-        const drawWidth = Math.min(scaledWidth, this.app.canvas.width - drawX);
-        const drawHeight = Math.min(scaledHeight, this.app.canvas.height - drawY);
+        const drawWidth = Math.min(scaledWidthInt, canvasWidth - drawX);
+        const drawHeight = Math.min(scaledHeightInt, canvasHeight - drawY);
         
-        // 计算源图像的对应区域
-        const srcX = Math.max(0, -alignedOffsetX / this.app.zoom);
-        const srcY = Math.max(0, -alignedOffsetY / this.app.zoom);
-        const srcWidth = Math.min(this.app.originalWidth - srcX, drawWidth / this.app.zoom);
-        const srcHeight = Math.min(this.app.originalHeight - srcY, drawHeight / this.app.zoom);
+        // 计算源图像的对应区域（整数值，关键修复）
+        const srcX = alignedOffsetX < 0 ? Math.round(-alignedOffsetX / this.app.zoom) : 0;
+        const srcY = alignedOffsetY < 0 ? Math.round(-alignedOffsetY / this.app.zoom) : 0;
+        const srcWidth = Math.round(Math.min(this.app.originalWidth - srcX, drawWidth / this.app.zoom));
+        const srcHeight = Math.round(Math.min(this.app.originalHeight - srcY, drawHeight / this.app.zoom));
         
-        if (srcWidth > 0 && srcHeight > 0) {
-            // 使用整数坐标绘制，避免亚像素渲染导致的模糊
+        // 重新计算绘制尺寸以匹配源区域（确保比例正确）
+        const finalDrawWidth = Math.round(srcWidth * this.app.zoom);
+        const finalDrawHeight = Math.round(srcHeight * this.app.zoom);
+        
+        if (srcWidth > 0 && srcHeight > 0 && finalDrawWidth > 0 && finalDrawHeight > 0) {
+            // 使用整数坐标绘制，避免亚像素渲染导致的模糊和变形
             this.app.ctx.drawImage(
                 this.app.image,
-                Math.round(srcX), Math.round(srcY), Math.round(srcWidth), Math.round(srcHeight),
-                Math.round(drawX), Math.round(drawY), Math.round(drawWidth), Math.round(drawHeight)
+                srcX, srcY, srcWidth, srcHeight,
+                drawX, drawY, finalDrawWidth, finalDrawHeight
             );
         }
         
