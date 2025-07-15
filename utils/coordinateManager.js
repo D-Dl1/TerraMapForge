@@ -4,6 +4,8 @@ export class CoordinateManager {
         this.app = app;
         this.coordinates = [];
         this.nextId = 1;
+        this.maxCoordinates = 512;
+        this.nextBotId = 1;
         
         // 拖拽相关变量
         this.draggedItem = null;
@@ -17,6 +19,7 @@ export class CoordinateManager {
         this.coordinatesCount = document.getElementById('coordinatesCount');
         this.exportCoordsBtn = document.getElementById('exportCoords');
         this.exportNamesBtn = document.getElementById('exportNames');
+        this.exportJsonBtn = document.getElementById('exportJson');
         
         this.setupEventListeners();
         this.initializeDefault();
@@ -30,6 +33,7 @@ export class CoordinateManager {
     setupEventListeners() {
         this.exportCoordsBtn.addEventListener('click', () => this.exportCoordinates());
         this.exportNamesBtn.addEventListener('click', () => this.exportNames());
+        this.exportJsonBtn.addEventListener('click', () => this.exportJson());
     }
     
     addCoordinate(x, y, name = null, isPlayer = false) {
@@ -672,5 +676,151 @@ export class CoordinateManager {
         };
         
         pulseAnimation(0);
+    }
+
+    exportJson() {
+        this.app.updateStatus('正在生成 JSON...');
+        
+        try {
+            const coordinates = this.coordinates;
+            const spawningData = new Array(1024).fill(0); // 512 players, each with x,y coordinates
+            const playerNamesData = new Array(512).fill('');
+            
+            // 填充用户的标记点数据
+            for (let i = 0; i < Math.min(coordinates.length, 512); i++) {
+                const coord = coordinates[i];
+                const arrayIndex = i * 2;
+                spawningData[arrayIndex] = coord.x;     // x 坐标
+                spawningData[arrayIndex + 1] = coord.y; // y 坐标
+                playerNamesData[i] = coord.name || `Player ${i + 1}`;
+            }
+            
+            // 填充剩余位置为默认机器人
+            for (let i = coordinates.length; i < 512; i++) {
+                playerNamesData[i] = '';
+            }
+
+            // 获取当前地图图片的base64数据
+            let canvasData = null;
+            if (this.app.image) {
+                // 创建一个临时canvas来转换图片为base64
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = this.app.image.width;
+                tempCanvas.height = this.app.image.height;
+                tempCtx.drawImage(this.app.image, 0, 0);
+                canvasData = tempCanvas.toDataURL('image/png'); // 转换为base64格式的PNG
+            }
+
+            // 获取用户选择的机器人难度
+            const botDifficultySelect = document.getElementById('botDifficulty');
+            const selectedBotDifficulty = parseInt(botDifficultySelect.value);
+
+            // 创建完整的 JSON 数据结构 - 使用正确的默认值
+            const jsonData = {
+                // 地图设置 - 自定义地图
+                "mapType": 2,  // 2 = 自定义地图
+                "mapProceduralIndex": 2,
+                "mapRealisticIndex": 0,
+                "mapSeed": 14071,  // 使用固定的地图种子，与示例文件一致
+                "mapName": "",
+                "canvas": canvasData,  // 包含当前地图图片的base64数据
+                "passableWater": 1,
+                "passableMountains": 1,
+                
+                // 玩家设置
+                "playerCount": 512,
+                "humanCount": 1,
+                "selectedPlayer": 0,
+                
+                // 游戏模式设置 (根据需要调整)
+                "gameMode": 0,  // 0 = 大逃杀模式
+                "playerMode": 0,
+                "battleRoyaleMode": 0,
+                "numberTeams": 2,
+                "isZombieMode": 0,
+                "isContest": 0,
+                "isReplay": 0,
+                "elo": null,
+                
+                // 颜色设置
+                "colorsType": 0,
+                "colorsPersonalized": 1,
+                "colorsData": [124896, ...new Array(511).fill(0)],  // 第一个玩家颜色，其他为0
+                "selectableColor": 1,
+                
+                // 队伍设置（大逃杀模式暂时不用，但保留默认结构）
+                "teamPlayerCount": [0, 256, 0, 256, 0, 0, 0, 0, 0],  // 大逃杀模式的默认队伍设置
+                "neutralBots": 0,
+                
+                // 机器人难度设置 - 使用默认值，但设置用户选择的难度
+                "botDifficultyType": 0,  // 0 = 统一难度
+                "botDifficultyValue": selectedBotDifficulty,  // 用户选择的难度
+                "botDifficultyTeam": null,
+                "botDifficultyData": null,  // 使用默认值null
+                
+                // 出生点设置
+                "spawningType": 2,  // 2 = 自定义出生点
+                "spawningSeed": 0,
+                "spawningData": spawningData,
+                "selectableSpawn": 0,
+                
+                // 玩家名称设置
+                "playerNamesType": 2,  // 2 = 自定义名称
+                "playerNamesData": playerNamesData,
+                "selectableName": 0,
+                
+                // 收入设置 - 使用游戏默认值
+                "aIncomeType": 0,      // 默认攻击收入类型
+                "aIncomeValue": 0,     // 默认攻击收入值
+                "aIncomeData": null,   // 默认攻击收入数据
+                
+                // 领土收入 - 使用游戏默认值
+                "tIncomeType": 0,      // 默认领土收入类型
+                "tIncomeValue": 32,    // 默认领土收入值
+                "tIncomeData": null,   // 默认领土收入数据
+                
+                // 利息收入 - 使用游戏默认值
+                "iIncomeType": 0,      // 默认利息收入类型
+                "iIncomeValue": 64,    // 默认利息收入值
+                "iIncomeData": null,   // 默认利息收入数据
+                
+                // 起始资源 - 使用游戏默认值
+                "sResourcesType": 0,   // 默认起始资源类型
+                "sResourcesValue": 0,  // 默认起始资源值
+                "sResourcesData": null // 默认起始资源数据
+            };
+
+            // 创建下载文件
+            const jsonString = JSON.stringify(jsonData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tt_scenario.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            const difficultyNames = ['非常简单', '简单的', '普通的', '难的', '非常困难', '不可能的', 'H Bot'];
+            let statusMessage = `JSON 导出成功！${coordinates.length} 个标记点已转换`;
+            statusMessage += `，机器人难度：${difficultyNames[selectedBotDifficulty]}`;
+            if (canvasData) {
+                statusMessage += `，地图图片已包含`;
+            } else {
+                statusMessage += `，警告：未包含地图图片`;
+            }
+            this.app.updateStatus(statusMessage);
+            
+            setTimeout(() => {
+                this.app.updateStatus('');
+            }, 3000);
+            
+        } catch (error) {
+            console.error('JSON 导出失败:', error);
+            this.app.updateStatus('JSON 导出失败: ' + error.message);
+        }
     }
 } 

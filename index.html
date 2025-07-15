@@ -674,6 +674,46 @@
         .coordinates-list::-webkit-scrollbar-thumb:hover {
             background: #999;
         }
+
+        .coordinates-count {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .bot-difficulty-section {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .bot-difficulty-section h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .bot-difficulty-section select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            font-size: 14px;
+        }
+        
+        .export-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
@@ -733,13 +773,27 @@
         <div class="coordinates-panel">
             <h3>标记点管理</h3>
             
+            <div class="coordinates-count">
+                <span id="coordinatesCount">0</span> / 512 个标记点
+            </div>
+            
+            <div class="bot-difficulty-section">
+                <h4>机器人难度设置</h4>
+                <select id="botDifficulty">
+                    <option value="0">🟢 非常简单</option>
+                    <option value="1">⚪ 简单的</option>
+                    <option value="2" selected>⚪ 普通的</option>
+                    <option value="3">⚪ 难的</option>
+                    <option value="4">⚪ 非常困难</option>
+                    <option value="5">⚪ 不可能的</option>
+                    <option value="6">⚪ H Bot</option>
+                </select>
+            </div>
+            
             <div class="export-controls">
                 <button id="exportCoords">导出坐标</button>
                 <button id="exportNames">导出名称</button>
-            </div>
-            
-            <div class="coordinates-count">
-                <span id="coordinatesCount">0</span> / 512 个标记点
+                <button id="exportJson">导出 JSON</button>
             </div>
             
             <div class="coordinates-list" id="coordinatesList">
