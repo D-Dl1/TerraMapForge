@@ -7,6 +7,9 @@ export class CoordinateManager {
         this.maxCoordinates = 512;
         this.nextBotId = 1;
         
+        // Bot个性化设置数据
+        this.botSettings = new Map(); // 存储每个bot的个性化设置
+        
         // 拖拽相关变量
         this.draggedItem = null;
         this.isDragging = false;
@@ -20,6 +23,10 @@ export class CoordinateManager {
         this.exportCoordsBtn = document.getElementById('exportCoords');
         this.exportNamesBtn = document.getElementById('exportNames');
         this.exportJsonBtn = document.getElementById('exportJson');
+        this.autoFillBotsBtn = document.getElementById('autoFillBots');
+        this.fillDifficultySelect = document.getElementById('fillDifficulty');
+        this.globalBotDifficultySelect = document.getElementById('globalBotDifficulty');
+        this.applyToAllBotsBtn = document.getElementById('applyToAllBots');
         
         this.setupEventListeners();
         this.initializeDefault();
@@ -34,6 +41,9 @@ export class CoordinateManager {
         this.exportCoordsBtn.addEventListener('click', () => this.exportCoordinates());
         this.exportNamesBtn.addEventListener('click', () => this.exportNames());
         this.exportJsonBtn.addEventListener('click', () => this.exportJson());
+        this.autoFillBotsBtn.addEventListener('click', () => this.autoFillBots());
+        this.applyToAllBotsBtn.addEventListener('click', () => this.applyToAllBots());
+        this.fillDifficultySelect.addEventListener('change', () => this.updateFillCount());
     }
     
     addCoordinate(x, y, name = null, isPlayer = false) {
@@ -71,6 +81,11 @@ export class CoordinateManager {
             // 不允许删除Player坐标
             if (coord.isPlayer) {
                 return false;
+            }
+            
+            // 删除对应的bot设置
+            if (this.botSettings.has(id)) {
+                this.botSettings.delete(id);
             }
             
             this.coordinates.splice(index, 1);
@@ -115,10 +130,21 @@ export class CoordinateManager {
         
         this.coordinates.forEach((coord, index) => {
             const item = document.createElement('div');
-            item.className = `coordinate-item ${coord.isPlayer ? 'player' : ''}`;
+            item.className = `coordinate-item ${coord.isPlayer ? 'player' : 'bot'}`;
             item.draggable = true;
             item.dataset.id = coord.id;
             item.dataset.index = index;
+            
+            // 为bot添加点击事件来切换设置面板
+            if (!coord.isPlayer) {
+                item.addEventListener('click', (e) => {
+                    // 阻止在拖拽手柄、输入框和按钮上的点击
+                    if (e.target.matches('.drag-handle, input, button, .bot-settings-panel, .bot-settings-panel *')) {
+                        return;
+                    }
+                    this.toggleBotSettings(coord.id);
+                });
+            }
             
             const dragHandle = document.createElement('span');
             dragHandle.className = 'drag-handle';
@@ -395,6 +421,7 @@ export class CoordinateManager {
     
     updateCount() {
         this.coordinatesCount.textContent = this.coordinates.length;
+        // 更新补全数量限制
     }
     
     exportCoordinates() {
@@ -678,7 +705,7 @@ export class CoordinateManager {
         pulseAnimation(0);
     }
 
-    exportJson() {
+    async exportJson() {
         this.app.updateStatus('正在生成 JSON...');
         
         try {
@@ -703,28 +730,131 @@ export class CoordinateManager {
             // 获取当前地图图片的base64数据
             let canvasData = null;
             if (this.app.image) {
-                // 创建一个临时canvas来转换图片为base64
                 const tempCanvas = document.createElement('canvas');
                 const tempCtx = tempCanvas.getContext('2d');
                 tempCanvas.width = this.app.image.width;
                 tempCanvas.height = this.app.image.height;
                 tempCtx.drawImage(this.app.image, 0, 0);
-                canvasData = tempCanvas.toDataURL('image/png'); // 转换为base64格式的PNG
+                canvasData = tempCanvas.toDataURL('image/png');
             }
 
-            // 获取用户选择的机器人难度
-            const botDifficultySelect = document.getElementById('botDifficulty');
-            const selectedBotDifficulty = parseInt(botDifficultySelect.value);
+            // 获取全局机器人难度设置
+            const globalBotDifficulty = parseInt(this.globalBotDifficultySelect.value) || 2;
+            
+            // 游戏默认值
+            const startingResourcesByDifficulty = [60, 74, 112, 200, 256, 512, 512]; // 难度 0-6 对应的起始资源
+            const defaultValues = {
+                difficulty: globalBotDifficulty,
+                additionalIncome: 0,
+                territoryIncome: 32,
+                interestIncome: 64,
+                startingResources: startingResourcesByDifficulty[globalBotDifficulty]
+            };
+            
+            // 检查每种设置是否被自定义
+            const customizations = {
+                botDifficulty: false,
+                additionalIncome: false,
+                territoryIncome: false,
+                interestIncome: false,
+                startingResources: false
+            };
+            
+            // 遍历所有bot设置，检查哪些项被自定义了
+            for (const coord of coordinates) {
+                if (!coord.isPlayer && this.botSettings.has(coord.id)) {
+                    const settings = this.getBotSettings(coord.id);
+                    
+                    if (settings.difficulty !== defaultValues.difficulty) {
+                        customizations.botDifficulty = true;
+                    }
+                    if (settings.additionalIncome.value !== defaultValues.additionalIncome) {
+                        customizations.additionalIncome = true;
+                    }
+                    if (settings.territoryIncome.value !== defaultValues.territoryIncome) {
+                        customizations.territoryIncome = true;
+                    }
+                    if (settings.interestIncome.value !== defaultValues.interestIncome) {
+                        customizations.interestIncome = true;
+                    }
+                    if (settings.startingResources.value !== startingResourcesByDifficulty[settings.difficulty]) {
+                        customizations.startingResources = true;
+                    }
+                }
+            }
+            
+            // 初始化数据数组
+            let botDifficultyData = null;
+            let aIncomeData = null;
+            let tIncomeData = null;
+            let iIncomeData = null;
+            let sResourcesData = null;
+            
+            // 如果有自定义设置，初始化对应的数组
+            if (customizations.botDifficulty) {
+                botDifficultyData = new Array(512).fill(defaultValues.difficulty);
+            }
+            if (customizations.additionalIncome) {
+                aIncomeData = new Array(512).fill(defaultValues.additionalIncome);
+            }
+            if (customizations.territoryIncome) {
+                tIncomeData = new Array(512).fill(defaultValues.territoryIncome);
+            }
+            if (customizations.interestIncome) {
+                iIncomeData = new Array(512).fill(defaultValues.interestIncome);
+            }
+            if (customizations.startingResources) {
+                sResourcesData = new Array(512);
+                // 填充默认起始资源（根据全局难度）
+                for (let i = 0; i < 512; i++) {
+                    sResourcesData[i] = defaultValues.startingResources;
+                }
+            }
+            
+            // 应用用户的个性化设置
+            for (let i = 0; i < Math.min(coordinates.length, 512); i++) {
+                const coord = coordinates[i];
+                
+                if (!coord.isPlayer && this.botSettings.has(coord.id)) {
+                    const settings = this.getBotSettings(coord.id);
+                    
+                    if (botDifficultyData && settings.difficulty !== defaultValues.difficulty) {
+                        botDifficultyData[i] = settings.difficulty;
+                    }
+                    
+                    if (aIncomeData && settings.additionalIncome.value !== defaultValues.additionalIncome) {
+                        aIncomeData[i] = settings.additionalIncome.value;
+                    }
+                    
+                    if (tIncomeData && settings.territoryIncome.value !== defaultValues.territoryIncome) {
+                        tIncomeData[i] = settings.territoryIncome.value;
+                    }
+                    
+                    if (iIncomeData && settings.interestIncome.value !== defaultValues.interestIncome) {
+                        iIncomeData[i] = settings.interestIncome.value;
+                    }
+                    
+                    if (sResourcesData) {
+                        if (settings.startingResources.value !== 0) {
+                            // 用户设置了自定义值
+                            sResourcesData[i] = settings.startingResources.value;
+                        } else {
+                            // 使用该bot难度对应的默认值
+                            sResourcesData[i] = startingResourcesByDifficulty[settings.difficulty];
+                        }
+                    }
+                }
+            }
 
-            // 创建完整的 JSON 数据结构 - 使用正确的默认值
+            // 创建完整的 JSON 数据结构
             const jsonData = {
-                // 地图设置 - 自定义地图
-                "mapType": 2,  // 2 = 自定义地图
+                // 地图设置
+                "mapType": 2,
                 "mapProceduralIndex": 2,
                 "mapRealisticIndex": 0,
-                "mapSeed": 14071,  // 使用固定的地图种子，与示例文件一致
+                "mapSeed": 14071,
                 "mapName": "",
-                "canvas": canvasData,  // 包含当前地图图片的base64数据
+                "canvas": canvasData,
                 "passableWater": 1,
                 "passableMountains": 1,
                 
@@ -733,8 +863,8 @@ export class CoordinateManager {
                 "humanCount": 1,
                 "selectedPlayer": 0,
                 
-                // 游戏模式设置 (根据需要调整)
-                "gameMode": 0,  // 0 = 大逃杀模式
+                // 游戏模式设置
+                "gameMode": 0,
                 "playerMode": 0,
                 "battleRoyaleMode": 0,
                 "numberTeams": 2,
@@ -746,49 +876,49 @@ export class CoordinateManager {
                 // 颜色设置
                 "colorsType": 0,
                 "colorsPersonalized": 1,
-                "colorsData": [124896, ...new Array(511).fill(0)],  // 第一个玩家颜色，其他为0
+                "colorsData": [124896, ...new Array(511).fill(0)],
                 "selectableColor": 1,
                 
-                // 队伍设置（大逃杀模式暂时不用，但保留默认结构）
-                "teamPlayerCount": [0, 256, 0, 256, 0, 0, 0, 0, 0],  // 大逃杀模式的默认队伍设置
+                // 队伍设置
+                "teamPlayerCount": [0, 256, 0, 256, 0, 0, 0, 0, 0],
                 "neutralBots": 0,
                 
-                // 机器人难度设置 - 使用默认值，但设置用户选择的难度
-                "botDifficultyType": 0,  // 0 = 统一难度
-                "botDifficultyValue": selectedBotDifficulty,  // 用户选择的难度
+                // 机器人难度设置
+                "botDifficultyType": customizations.botDifficulty ? 3 : 0,
+                "botDifficultyValue": globalBotDifficulty,
                 "botDifficultyTeam": null,
-                "botDifficultyData": null,  // 使用默认值null
+                "botDifficultyData": botDifficultyData,
                 
                 // 出生点设置
-                "spawningType": 2,  // 2 = 自定义出生点
+                "spawningType": 2,
                 "spawningSeed": 0,
                 "spawningData": spawningData,
-                "selectableSpawn": 0,
+                "selectableSpawn": 1,
                 
                 // 玩家名称设置
-                "playerNamesType": 2,  // 2 = 自定义名称
+                "playerNamesType": 2,
                 "playerNamesData": playerNamesData,
                 "selectableName": 0,
                 
-                // 收入设置 - 使用游戏默认值
-                "aIncomeType": 0,      // 默认攻击收入类型
-                "aIncomeValue": 0,     // 默认攻击收入值
-                "aIncomeData": null,   // 默认攻击收入数据
+                // 攻击收入设置
+                "aIncomeType": customizations.additionalIncome ? 2 : 0,
+                "aIncomeValue": defaultValues.additionalIncome,
+                "aIncomeData": aIncomeData,
                 
-                // 领土收入 - 使用游戏默认值
-                "tIncomeType": 0,      // 默认领土收入类型
-                "tIncomeValue": 32,    // 默认领土收入值
-                "tIncomeData": null,   // 默认领土收入数据
+                // 领土收入设置
+                "tIncomeType": customizations.territoryIncome ? 2 : 0,
+                "tIncomeValue": defaultValues.territoryIncome,
+                "tIncomeData": tIncomeData,
                 
-                // 利息收入 - 使用游戏默认值
-                "iIncomeType": 0,      // 默认利息收入类型
-                "iIncomeValue": 64,    // 默认利息收入值
-                "iIncomeData": null,   // 默认利息收入数据
+                // 利息收入设置
+                "iIncomeType": customizations.interestIncome ? 2 : 0,
+                "iIncomeValue": defaultValues.interestIncome,
+                "iIncomeData": iIncomeData,
                 
-                // 起始资源 - 使用游戏默认值
-                "sResourcesType": 0,   // 默认起始资源类型
-                "sResourcesValue": 0,  // 默认起始资源值
-                "sResourcesData": null // 默认起始资源数据
+                // 起始资源设置
+                "sResourcesType": customizations.startingResources ? 2 : 0,
+                "sResourcesValue": defaultValues.startingResources,
+                "sResourcesData": sResourcesData
             };
 
             // 创建下载文件
@@ -806,7 +936,13 @@ export class CoordinateManager {
             
             const difficultyNames = ['非常简单', '简单的', '普通的', '难的', '非常困难', '不可能的', 'H Bot'];
             let statusMessage = `JSON 导出成功！${coordinates.length} 个标记点已转换`;
-            statusMessage += `，机器人难度：${difficultyNames[selectedBotDifficulty]}`;
+            statusMessage += `，默认难度：${difficultyNames[globalBotDifficulty]}`;
+            
+            const customizedSettings = Object.keys(customizations).filter(key => customizations[key]);
+            if (customizedSettings.length > 0) {
+                statusMessage += `，自定义了：${customizedSettings.join(', ')}`;
+            }
+            
             if (canvasData) {
                 statusMessage += `，地图图片已包含`;
             } else {
@@ -822,5 +958,196 @@ export class CoordinateManager {
             console.error('JSON 导出失败:', error);
             this.app.updateStatus('JSON 导出失败: ' + error.message);
         }
+    }
+    
+    // 自动补全Bot功能
+    autoFillBots() {
+        const fillDifficulty = parseInt(this.fillDifficultySelect.value) || 0;
+        const currentCount = this.coordinates.length;
+        const neededCount = this.maxCoordinates - currentCount;
+        
+        if (neededCount <= 0) {
+            this.app.updateStatus('已经有512个标记点，无需补全');
+            return;
+        }
+        
+        // 生成(0,0)坐标的Bot，并设置指定难度
+        for (let i = 0; i < neededCount; i++) {
+            const oldLength = this.coordinates.length;
+            this.addCoordinate(0, 0, null, false);
+            
+            // 获取刚添加的bot并设置难度
+            if (this.coordinates.length > oldLength) {
+                const newBot = this.coordinates[this.coordinates.length - 1];
+                
+                // 为自动补全的bot设置个性化难度
+                const botSettings = this.getDefaultBotSettings();
+                botSettings.difficulty = fillDifficulty;
+                this.setBotSettings(newBot.id, botSettings);
+            }
+        }
+        
+        const difficultyNames = ['非常简单', '简单的', '普通的', '难的', '非常困难', '不可能的', 'H Bot'];
+        let statusMessage = `快速填充完成！新增 ${neededCount} 个Bot (坐标: 0,0，难度: ${difficultyNames[fillDifficulty]}) - 已启用个性化模式`;
+        
+        this.app.updateStatus(statusMessage);
+        this.app.redrawCanvas();
+    }
+    
+    // 批量应用设置到所有Bot
+    applyToAllBots() {
+        const selectedDifficulty = parseInt(this.globalBotDifficultySelect.value) || 0;
+        let botCount = 0;
+        
+        for (const coord of this.coordinates) {
+            if (!coord.isPlayer) {
+                const botSettings = this.getDefaultBotSettings();
+                botSettings.difficulty = selectedDifficulty;
+                this.setBotSettings(coord.id, botSettings);
+                botCount++;
+            }
+        }
+        
+        if (botCount > 0) {
+            const difficultyNames = ['非常简单', '简单的', '普通的', '难的', '非常困难', '不可能的', 'H Bot'];
+            this.app.updateStatus(`已统一设置 ${botCount} 个手动标记Bot的难度为：${difficultyNames[selectedDifficulty]}`);
+        } else {
+            this.app.updateStatus('没有找到手动标记的Bot');
+        }
+    }
+    
+    // 更新补全数量限制 (已不需要，但保留以防其他地方调用)
+    updateFillCount() {
+        // 不再需要具体实现
+    }
+    
+    // 获取默认的bot设置
+    getDefaultBotSettings() {
+        return {
+            difficulty: 2, // 默认普通难度
+            additionalIncome: {
+                type: 0, // 默认无额外收入
+                value: 0
+            },
+            startingResources: {
+                type: 0, // 默认按难度
+                value: 0
+            },
+            territoryIncome: {
+                type: 0, // 默认
+                value: 32
+            },
+            interestIncome: {
+                type: 0, // 默认
+                value: 64
+            }
+        };
+    }
+    
+    // 设置bot的个性化配置
+    setBotSettings(botId, settings) {
+        this.botSettings.set(botId, { ...this.getDefaultBotSettings(), ...settings });
+    }
+    
+    // 获取bot的个性化配置
+    getBotSettings(botId) {
+        return this.botSettings.get(botId) || this.getDefaultBotSettings();
+    }
+    
+    // 切换bot设置面板的显示状态
+    toggleBotSettings(botId) {
+        const coordinate = this.coordinates.find(coord => coord.id === botId);
+        if (!coordinate || coordinate.name === 'Player') return;
+        
+        const listItem = document.querySelector(`[data-id="${botId}"]`);
+        if (!listItem) return;
+        
+        let settingsPanel = listItem.querySelector('.bot-settings-panel');
+        
+        if (!settingsPanel) {
+            // 创建设置面板
+            settingsPanel = this.createBotSettingsPanel(botId);
+            listItem.appendChild(settingsPanel);
+        }
+        
+        // 切换显示状态
+        settingsPanel.classList.toggle('expanded');
+    }
+    
+    // 创建bot设置面板
+    createBotSettingsPanel(botId) {
+        const settings = this.getBotSettings(botId);
+        const panel = document.createElement('div');
+        panel.className = 'bot-settings-panel';
+        
+        panel.innerHTML = `
+            <div class="bot-settings-row">
+                <label>个人难度:</label>
+                <select data-setting="difficulty">
+                    <option value="0" ${settings.difficulty === 0 ? 'selected' : ''}>非常简单</option>
+                    <option value="1" ${settings.difficulty === 1 ? 'selected' : ''}>简单的</option>
+                    <option value="2" ${settings.difficulty === 2 ? 'selected' : ''}>普通的</option>
+                    <option value="3" ${settings.difficulty === 3 ? 'selected' : ''}>难的</option>
+                    <option value="4" ${settings.difficulty === 4 ? 'selected' : ''}>非常困难</option>
+                    <option value="5" ${settings.difficulty === 5 ? 'selected' : ''}>不可能的</option>
+                    <option value="6" ${settings.difficulty === 6 ? 'selected' : ''}>H Bot</option>
+                </select>
+            </div>
+            
+            <div class="bot-settings-row">
+                <label>额外收入:</label>
+                <input type="number" data-setting="additionalIncomeValue" value="${settings.additionalIncome.value}" min="0" step="1" placeholder="默认: 0">
+            </div>
+            
+            <div class="bot-settings-row">
+                <label>起始资源:</label>
+                <input type="number" data-setting="startingResourcesValue" value="${settings.startingResources.value}" min="0" step="1" placeholder="默认: 按难度">
+            </div>
+            
+            <div class="bot-settings-row">
+                <label>领土收入:</label>
+                <input type="number" data-setting="territoryIncomeValue" value="${settings.territoryIncome.value}" min="0" step="1" placeholder="默认: 32">
+            </div>
+            
+            <div class="bot-settings-row">
+                <label>利息收入:</label>
+                <input type="number" data-setting="interestIncomeValue" value="${settings.interestIncome.value}" min="0" step="1" placeholder="默认: 64">
+            </div>
+        `;
+        
+        // 添加事件监听器
+        panel.addEventListener('change', (e) => {
+            this.updateBotSetting(botId, e.target);
+        });
+        
+        return panel;
+    }
+    
+    // 更新bot设置
+    updateBotSetting(botId, element) {
+        const setting = element.dataset.setting;
+        const value = element.type === 'number' ? parseInt(element.value) || 0 : element.value;
+        
+        const currentSettings = this.getBotSettings(botId);
+        
+        switch (setting) {
+            case 'difficulty':
+                currentSettings.difficulty = parseInt(value);
+                break;
+            case 'additionalIncomeValue':
+                currentSettings.additionalIncome.value = value;
+                break;
+            case 'startingResourcesValue':
+                currentSettings.startingResources.value = value;
+                break;
+            case 'territoryIncomeValue':
+                currentSettings.territoryIncome.value = value;
+                break;
+            case 'interestIncomeValue':
+                currentSettings.interestIncome.value = value;
+                break;
+        }
+        
+        this.setBotSettings(botId, currentSettings);
     }
 } 

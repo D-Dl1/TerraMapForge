@@ -708,11 +708,144 @@
             font-size: 14px;
         }
         
-        .export-controls {
+        .bot-auto-fill-section {
+            margin: 15px 0;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        
+        .bot-auto-fill-section h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .bot-auto-fill-section input {
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .bot-auto-fill-section button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #007cba;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .bot-auto-fill-section button:hover {
+            background: #005a8a;
+        }
+        
+        .manual-marking-section,
+        .auto-fill-section,
+        .individual-settings-section {
+            margin: 15px 0;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        
+        .manual-marking-section h4,
+        .auto-fill-section h4,
+        .individual-settings-section h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .manual-marking-section button,
+        .auto-fill-section button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #007cba;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .manual-marking-section button:hover,
+        .auto-fill-section button:hover {
+            background: #005a8a;
+        }
+        
+        .bot-settings-section {
+            margin: 15px 0;
+        }
+        
+        .bot-settings-section h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .bot-settings-panel {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            margin-top: 8px;
+            display: none;
+        }
+        
+        .bot-settings-panel.expanded {
+            display: block;
+            animation: slideDown 0.2s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 300px;
+                padding-top: 12px;
+                padding-bottom: 12px;
+            }
+        }
+        
+        .bot-settings-row {
             display: flex;
-            flex-direction: column;
+            align-items: center;
             gap: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 8px;
+        }
+        
+        .bot-settings-row label {
+            font-size: 12px;
+            color: #333;
+            min-width: 80px;
+        }
+        
+        .bot-settings-row select,
+        .bot-settings-row input {
+            flex: 1;
+            padding: 4px 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        
+        .coordinate-item.bot {
+            cursor: pointer;
+        }
+        
+        .coordinate-item.bot:hover {
+            background: #e8f4f8;
         }
     </style>
 </head>
@@ -777,17 +910,49 @@
                 <span id="coordinatesCount">0</span> / 512 个标记点
             </div>
             
-            <div class="bot-difficulty-section">
-                <h4>机器人难度设置</h4>
-                <select id="botDifficulty">
-                    <option value="0">🟢 非常简单</option>
-                    <option value="1">⚪ 简单的</option>
-                    <option value="2" selected>⚪ 普通的</option>
-                    <option value="3">⚪ 难的</option>
-                    <option value="4">⚪ 非常困难</option>
-                    <option value="5">⚪ 不可能的</option>
-                    <option value="6">⚪ H Bot</option>
-                </select>
+            <div class="manual-marking-section">
+                <h4>手动标记管理</h4>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <select id="globalBotDifficulty" style="flex: 1; padding: 6px;">
+                        <option value="0">非常简单</option>
+                        <option value="1">简单的</option>
+                        <option value="2" selected>普通的</option>
+                        <option value="3">难的</option>
+                        <option value="4">非常困难</option>
+                        <option value="5">不可能的</option>
+                        <option value="6">H Bot</option>
+                    </select>
+                    <button id="applyToAllBots">统一难度</button>
+                </div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                    为所有手动标记的Bot设置统一难度
+                </div>
+            </div>
+            
+            <div class="auto-fill-section">
+                <h4>快速填充</h4>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <select id="fillDifficulty" style="flex: 1; padding: 6px;">
+                        <option value="0" selected>非常简单</option>
+                        <option value="1">简单的</option>
+                        <option value="2">普通的</option>
+                        <option value="3">难的</option>
+                        <option value="4">非常困难</option>
+                        <option value="5">不可能的</option>
+                        <option value="6">H Bot</option>
+                    </select>
+                    <button id="autoFillBots">填充至512</button>
+                </div>
+                <div style="font-size: 12px; color: #666;">
+                    自动填充Bot至512个，新Bot坐标(0,0)，指定难度
+                </div>
+            </div>
+            
+            <div class="individual-settings-section">
+                <h4>个性化设置</h4>
+                <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                    点击下方Bot可展开个性化设置（难度、收入、资源等）
+                </div>
             </div>
             
             <div class="export-controls">
